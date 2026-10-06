@@ -10,7 +10,10 @@ from app.models import File
 
 CHUNK_SIZE = 1024 * 1024
 
-async def save_uploaded_file(file: UploadFile, storage_dir: Path) -> tuple[str, Path, int, str]:
+class FileTooLargeError(Exception):
+    pass
+
+async def save_uploaded_file(file: UploadFile, storage_dir: Path, max_upload_size) -> tuple[str, Path, int, str]:
     filename = file.filename or "unnamed"
 
     safe_filename = Path(filename).name
@@ -19,14 +22,23 @@ async def save_uploaded_file(file: UploadFile, storage_dir: Path) -> tuple[str, 
 
     sha256 = hashlib.sha256()
     file_size = 0
+    try:
+        with storage_path.open("wb") as output_file:
+            while chunk := await file.read(CHUNK_SIZE):
+                file_size += len(chunk)
 
-    with storage_path.open("wb") as output_file:
-        while chunk := await file.read(CHUNK_SIZE):
-            output_file.write(chunk)
-            sha256.update(chunk)
-            file_size += len(chunk)
-
-    await file.close()
+                if file_size > max_upload_size:
+                    storage_path.unlink()
+                    await file.close()
+                    raise FileTooLargeError("File exceeds maximum allowed size")
+            
+                sha256.update(chunk)
+                output_file.write(chunk)
+    except Exception:
+        storage_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
 
     return filename, storage_path, file_size, sha256.hexdigest()
 

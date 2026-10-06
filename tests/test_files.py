@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.main import app
 from app.models import File
+from app.config import settings
 
 client = TestClient(app)
 
@@ -261,6 +262,38 @@ def test_upload_empty_file():
     assert data["size"] == 0
     assert len(data["sha256"]) == 64
 
+def test_upload_exceeding_file_limit_rejection():
+    oversized_content = b"x" * (settings.max_upload_size + 1)
+
+    response = client.post(
+        "/files",
+        files={
+            "file": (
+                "too-large.txt",
+                oversized_content,
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 413
+    assert response.json() == {
+        "detail": "File exceeds maximum allowed size"
+    }
+    db = SessionLocal()
+
+    try:
+        files = db.query(File).all()
+        assert files == []
+
+    finally:
+        db.close()
+
+    stored_files = [
+        path for path in Path(settings.storage_dir).iterdir()
+        if path.name != ".gitkeep"
+    ]   
+    assert stored_files == []
 
 
 

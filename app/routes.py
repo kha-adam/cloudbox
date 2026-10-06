@@ -8,6 +8,7 @@ from app.database import SessionLocal
 from app.config import settings
 from app.models import File
 from app.services.files import (
+    FileTooLargeError,
     save_uploaded_file,
     create_file_record,
     get_file,
@@ -25,7 +26,14 @@ STORAGE_DIR.mkdir(exist_ok=True)
 
 @router.post("/files", response_model=FileUploadResponse)
 async def upload_file(file: UploadFile = FastAPIFile(...)):
-    filename, storage_path, file_size, file_hash = await save_uploaded_file(file, STORAGE_DIR)
+    try:
+        filename, storage_path, file_size, file_hash = await save_uploaded_file(file, STORAGE_DIR, max_upload_size=settings.max_upload_size,)
+
+    except FileTooLargeError as exc:
+        raise HTTPException(
+            status_code=413,
+            detail=str(exc),
+        ) from exc
 
     try:
         file_id = create_file_record(
