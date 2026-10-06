@@ -17,5 +17,5 @@ def health_check():
         connection.execute(text("SELECT 1"))
     return {
         "status": "ok",
-        "database": "ok"
+        "database": "ok",
     }

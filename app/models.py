@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -16,6 +16,6 @@ class File(Base):
     storage_path: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
         nullable=False
     )

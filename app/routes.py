@@ -1,6 +1,7 @@
 import hashlib
 import uuid
 from pathlib import Path
+import os
 
 from fastapi import APIRouter, File as FastAPIFile, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -11,7 +12,7 @@ from app.models import File
 
 router = APIRouter()
 
-STORAGE_DIR = Path("storage")
+STORAGE_DIR = Path(os.getenv("STORAGE_DIR", "storage"))
 STORAGE_DIR.mkdir(exist_ok=True)
 
 CHUNK_SIZE = 1024 * 1024
