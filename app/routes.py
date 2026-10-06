@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File as FastAPIFile, UploadFile
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 
 from app.database import SessionLocal
 from app.models import File
@@ -18,8 +18,8 @@ CHUNK_SIZE = 1024 * 1024
 @router.post("/files")
 async def upload_file(file: UploadFile = FastAPIFile(...)):
     filename = file.filename or "unnamed"
-
-    storage_filename = f"{uuid.uuid4()}_{filename}"
+    safe_filename = Path(filename).name
+    storage_filename = f"{uuid.uuid4()}_{safe_filename}"
     storage_path = STORAGE_DIR / storage_filename
 
     sha256 = hashlib.sha256()
@@ -57,5 +57,29 @@ async def upload_file(file: UploadFile = FastAPIFile(...)):
         storage_path.unlink(missing_ok=True)
         raise
 
+    finally:
+        db.close()
+
+@router.get("/files")
+def list_files():
+    db = SessionLocal()
+
+    try:
+        statement = select(File).order_by(File.created_at.desc())
+        results = db.execute(statement)
+
+        files = results.scalars().all()
+
+        return [
+            {
+                "id": file.id,
+                "filename": file.filename,
+                "size": file.size,
+                "mime_type": file.mime_type,
+                "sha256": file.sha256,
+                "created_at": file.created_at,
+            } 
+            for file in files
+        ]
     finally:
         db.close()
