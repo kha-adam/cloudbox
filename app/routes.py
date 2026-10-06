@@ -10,6 +10,8 @@ from app.models import File
 from app.services.files import (
     save_uploaded_file,
     create_file_record,
+    get_file,
+    delete_file_record,
 )
 from app.schemas import (
     DeleteFileResponse,
@@ -74,10 +76,7 @@ def download_file(file_id: int):
     db = SessionLocal()
 
     try:
-        statement = select(File).where(File.id == file_id)
-        result = db.execute(statement)
-
-        file = result.scalar_one_or_none()
+        file = get_file(file_id)
 
         if file is None:
             raise HTTPException(
@@ -106,10 +105,7 @@ def delete_file(file_id: int):
     db = SessionLocal()
 
     try:
-        statement = select(File).where(File.id == file_id)
-        result = db.execute(statement)
-
-        file = result.scalar_one_or_none()
+        file = get_file(file_id)
 
         if file is None:
             raise HTTPException(
@@ -122,10 +118,7 @@ def delete_file(file_id: int):
         if storage_path.exists():
             storage_path.unlink()
 
-        db.execute(
-            delete(File).where(File.id == file_id)
-            )
-        db.commit()
+        delete_file_record(file_id)
 
         return {
             "message": "File deleted",

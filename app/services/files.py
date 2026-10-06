@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
-from sqlalchemy import insert
+from sqlalchemy import insert, select, delete
 from app.database import SessionLocal
 from app.models import File
 
@@ -53,5 +53,34 @@ def create_file_record(filename: str, file_size: int, mime_type: str, file_hash:
 
     finally:
         db.close()    
+
+def get_file(file_id: int) -> File | None:
+    db = SessionLocal()
+
+    try:
+        statement = select(File).where(File.id == file_id)
+        result = db.execute(statement)
+
+        return result.scalar_one_or_none()
+
+    finally:
+        db.close()
+
+def delete_file_record(file_id: int) -> None:
+    db = SessionLocal()
+
+    try:
+        statement = delete(File).where(File.id == file_id)
+
+        db.execute(statement)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
 
 
