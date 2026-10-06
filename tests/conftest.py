@@ -23,7 +23,6 @@ Base.metadata.create_all(bind=engine)
 TEST_STORAGE_DIR = Path("test_storage")
 TEST_STORAGE_DIR.mkdir(exist_ok=True)
 
-@pytest.fixture(autouse=True)
 def clean_test_data():
     db = SessionLocal()
 
@@ -37,4 +36,12 @@ def clean_test_data():
         if path.name != ".gitkeep" and path.is_file():
             path.unlink()
 
+
+@pytest.fixture(autouse=True)
+def clean_test_data_fixture():
+    
+    clean_test_data()
+
     yield
+
+    clean_test_data()
