@@ -2,7 +2,8 @@ import hashlib
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File as FastAPIFile, UploadFile
+from fastapi import APIRouter, File as FastAPIFile, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import insert, select
 
 from app.database import SessionLocal
@@ -81,5 +82,37 @@ def list_files():
             } 
             for file in files
         ]
+    finally:
+        db.close()
+
+@router.get("/files/{file_id}/download")
+def download_file(file_id: int):
+    db = SessionLocal()
+
+    try:
+        statement = select(File).where(File.id == file_id)
+        result = db.execute(statement)
+
+        file = result.scalar_one_or_none()
+
+        if file is None:
+            raise HTTPException(
+                status_code=404,
+                detail="File not found",
+            )
+        
+        storage_path = Path(file.storage_path)
+
+        if not storage_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="Stored file not found",
+            )
+
+        return FileResponse(
+            path=storage_path,
+            media_type=file.mime_type,
+            filename=file.filename
+        )
     finally:
         db.close()
