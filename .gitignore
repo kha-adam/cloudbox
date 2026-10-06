@@ -2,10 +2,11 @@
 __pycache__/
 .pytest_cache/
 .env
+.env.test
 *.pyc
 storage/*
 !storage/.gitkeep
 test_storage/*
 !test_storage/.gitkeep
 .DS_Store
-large-test.bin
+large-test.bi

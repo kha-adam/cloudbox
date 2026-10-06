@@ -1,11 +1,11 @@
 from pathlib import Path
-import os
 
 from fastapi import APIRouter, File as FastAPIFile, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from app.database import SessionLocal
+from app.config import settings
 from app.models import File
 from app.services.files import (
     save_uploaded_file,
@@ -20,7 +20,7 @@ from app.schemas import (
 )
 router = APIRouter()
 
-STORAGE_DIR = Path(os.getenv("STORAGE_DIR", "storage"))
+STORAGE_DIR = Path(settings.storage_dir)
 STORAGE_DIR.mkdir(exist_ok=True)
 
 @router.post("/files", response_model=FileUploadResponse)

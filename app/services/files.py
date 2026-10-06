@@ -14,7 +14,7 @@ async def save_uploaded_file(file: UploadFile, storage_dir: Path) -> tuple[str, 
     filename = file.filename or "unnamed"
 
     safe_filename = Path(filename).name
-    storage_filename = f"{uuid.uuid4}_{safe_filename}"
+    storage_filename = f"{uuid.uuid4()}_{safe_filename}"
     storage_path = storage_dir / storage_filename
 
     sha256 = hashlib.sha256()
