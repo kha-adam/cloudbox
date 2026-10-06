@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File as FastAPIFile, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, delete
 
 from app.database import SessionLocal
 from app.models import File
@@ -114,5 +114,43 @@ def download_file(file_id: int):
             media_type=file.mime_type,
             filename=file.filename
         )
+    finally:
+        db.close()
+
+@router.delete("/files/{file_id}")
+def delete_file(file_id: int):
+    db = SessionLocal()
+
+    try:
+        statement = select(File).where(File.id == file_id)
+        result = db.execute(statement)
+
+        file = result.scalar_one_or_none()
+
+        if file is None:
+            raise HTTPException(
+                status_code=404,
+                detail="File not found",
+            )
+
+        storage_path = Path(file.storage_path)
+
+        if storage_path.exists():
+            storage_path.unlink()
+
+        db.execute(
+            delete(File).where(File.id == file_id)
+            )
+        db.commit()
+
+        return {
+            "message": "File deleted",
+            "id": file_id,
+        }
+
+    except Exception:
+        db.rollback()
+        raise
+
     finally:
         db.close()
