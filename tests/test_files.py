@@ -180,6 +180,87 @@ def test_delete_file():
 
     assert download_response.status_code == 404
 
+def test_download_nonexistant_file():
+    response = client.get(
+        f"/files/99999/download"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "File not found",
+    }
+
+def test_delete_nonexistant_file():
+    response = client.delete(
+            f"/files/99999"
+        )
+    
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "File not found",
+    }
+
+def test_download_when_storage_file_is_missing():
+    content = b"Temporary file"
+
+    upload_response = client.post(
+        "/files",
+        files={
+            "file": (
+                "missing.txt",
+                content,
+                "text/plain",
+            )
+        },
+    )
+
+    assert upload_response.status_code == 200
+
+    file_id = upload_response.json()["id"]
+
+    db = SessionLocal()
+
+    try:
+        file = db.get(File, file_id)
+
+        assert file is not None
+
+        storage_path = Path(file.storage_path)
+        assert storage_path.is_file()
+
+        storage_path.unlink()
+
+    finally:
+        db.close()   
+
+    response = client.get(f"files/{file_id}/download") 
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Stored file not found",
+    }
+
+def test_upload_empty_file():
+    content = b""
+    response = client.post(
+        "/files",
+        files={
+            "file": (
+                "empty.txt",
+                content,
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["filename"] == "empty.txt"
+    assert data["size"] == 0
+    assert len(data["sha256"]) == 64
+
 
 
 
