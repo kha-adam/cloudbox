@@ -9,7 +9,11 @@ from sqlalchemy import insert, select, delete
 
 from app.database import SessionLocal
 from app.models import File
-
+from app.schemas import (
+    DeleteFileResponse,
+    FileMetadataResponse,
+    FileUploadResponse,
+)
 router = APIRouter()
 
 STORAGE_DIR = Path(os.getenv("STORAGE_DIR", "storage"))
@@ -17,7 +21,7 @@ STORAGE_DIR.mkdir(exist_ok=True)
 
 CHUNK_SIZE = 1024 * 1024
 
-@router.post("/files")
+@router.post("/files", response_model=FileUploadResponse)
 async def upload_file(file: UploadFile = FastAPIFile(...)):
     filename = file.filename or "unnamed"
     safe_filename = Path(filename).name
@@ -62,7 +66,7 @@ async def upload_file(file: UploadFile = FastAPIFile(...)):
     finally:
         db.close()
 
-@router.get("/files")
+@router.get("/files", response_model=list[FileMetadataResponse])
 def list_files():
     db = SessionLocal()
 
@@ -118,7 +122,7 @@ def download_file(file_id: int):
     finally:
         db.close()
 
-@router.delete("/files/{file_id}")
+@router.delete("/files/{file_id}", response_model=DeleteFileResponse)
 def delete_file(file_id: int):
     db = SessionLocal()
 
