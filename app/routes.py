@@ -14,11 +14,15 @@ from app.services.files import (
     get_file,
     delete_file_record,
 )
+from app.services.users import get_user_by_email, create_user
+from app.security import hash_password, verify_password
 from app.schemas import (
     DeleteFileResponse,
     FileMetadataResponse,
     FileUploadResponse,
     FileListResponse,
+    UserRegisterRequest,
+    UserRegisterResponse,
 )
 router = APIRouter()
 
@@ -152,3 +156,35 @@ def delete_file(file_id: int):
 
     finally:
         db.close()
+
+@router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)
+def register_user(user: UserRegisterRequest):
+    email=user.email.strip().lower()
+
+    if not email:
+        raise HTTPException(
+            status_code=400,
+            detail="Email is required"
+        )
+    if not user.password:
+        raise HTTPException(
+            status_code=400,
+            detail="Password is required",
+        )
+
+    existing_user = get_user_by_email(email)
+
+    if existing_user is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Email already registered"
+        )
+
+    password_hash = hash_password(user.password)
+
+    user_id = create_user(email=email, password_hash=password_hash)
+
+    return {
+        "id": user_id,
+        "email": email,
+    }

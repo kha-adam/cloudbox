@@ -11,7 +11,7 @@ from alembic.config import Config
 from pathlib import Path
 
 from app.database import Base, SessionLocal, engine
-from app.models import File
+from app.models import File, User
 from app.config import settings
 
 def run_migrations():
@@ -26,6 +26,7 @@ def clean_test_data():
 
     try:
         db.query(File).delete()
+        db.query(User).delete()
         db.commit()
     finally:
         db.close()

@@ -29,3 +29,11 @@ class FileListResponse(BaseModel):
     limit: int
     offset: int
     total: int
+
+class UserRegisterRequest(BaseModel):
+    email: str
+    password: str
+
+class UserRegisterResponse(BaseModel):
+    id: int
+    email: str
