@@ -8,6 +8,8 @@ from app.config import settings
 
 client = TestClient(app)
 
+TEST_STORAGE_DIR = Path(settings.storage_dir)
+
 def test_health_check():
     response = client.get("/health")
 
@@ -290,10 +292,38 @@ def test_upload_exceeding_file_limit_rejection():
         db.close()
 
     stored_files = [
-        path for path in Path(settings.storage_dir).iterdir()
+        path for path in TEST_STORAGE_DIR.iterdir()
         if path.name != ".gitkeep"
     ]   
     assert stored_files == []
+
+def test_upload_doesnt_use_client_filename_as_storage_path():
+    response = client.post(
+        "/files",
+        files={
+            "file": (
+                "../../outside.txt",
+                b"secret data",
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["filename"] == "../../outside.txt"
+    stored_files = [
+        path
+        for path in TEST_STORAGE_DIR.iterdir()
+        if path.name != ".gitkeep"
+    ]
+
+    assert len(stored_files) == 1
+    assert stored_files[0].name != "../../outside.txt"
+    assert stored_files[0].parent == TEST_STORAGE_DIR    
+
 
 
 
