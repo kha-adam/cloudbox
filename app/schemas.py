@@ -23,3 +23,9 @@ class FileMetadataResponse(BaseModel):
 class DeleteFileResponse(BaseModel):
     message: str
     id: int
+
+class FileListResponse(BaseModel):
+    items: list[FileMetadataResponse]
+    limit: int
+    offset: int
+    total: int

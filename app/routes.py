@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from fastapi import APIRouter, File as FastAPIFile, HTTPException, UploadFile
+from fastapi import APIRouter, File as FastAPIFile, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.database import SessionLocal
 from app.config import settings
@@ -18,6 +18,7 @@ from app.schemas import (
     DeleteFileResponse,
     FileMetadataResponse,
     FileUploadResponse,
+    FileListResponse,
 )
 router = APIRouter()
 
@@ -55,27 +56,39 @@ async def upload_file(file: UploadFile = FastAPIFile(...)):
         storage_path.unlink(missing_ok=True)
         raise
 
-@router.get("/files", response_model=list[FileMetadataResponse])
-def list_files():
+@router.get("/files", response_model=FileListResponse)
+def list_files(limit: int = Query(default=50, ge=1, le=100), 
+               offset: int = Query(default=0, ge=0)):
     db = SessionLocal()
 
     try:
-        statement = select(File).order_by(File.created_at.desc())
+        total = db.scalar(select(func.count()).select_from(File))
+        statement = (
+            select(File)
+            .order_by(File.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            )
         results = db.execute(statement)
 
         files = results.scalars().all()
 
-        return [
-            {
-                "id": file.id,
-                "filename": file.filename,
-                "size": file.size,
-                "mime_type": file.mime_type,
-                "sha256": file.sha256,
-                "created_at": file.created_at,
-            } 
-            for file in files
-        ]
+        return {
+            "items": [
+                {
+                    "id": file.id,
+                    "filename": file.filename,
+                    "size": file.size,
+                    "mime_type": file.mime_type,
+                    "sha256": file.sha256,
+                    "created_at": file.created_at,
+                } 
+                for file in files
+            ],
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            }
     finally:
         db.close()
 

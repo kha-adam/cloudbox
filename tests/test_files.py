@@ -120,9 +120,12 @@ def test_list_files():
 
     files = response.json()
 
-    assert len(files) == 2
+    assert len(files["items"]) == 2
+    assert files["total"] == 2
+    assert files["limit"] == 50
+    assert files["offset"] == 0
 
-    filenames = {file["filename"] for file in files}
+    filenames = {file["filename"] for file in files["items"]}
 
     assert filenames == {"first.txt", "second.txt"}
 
@@ -324,6 +327,46 @@ def test_upload_doesnt_use_client_filename_as_storage_path():
     assert stored_files[0].name != "../../outside.txt"
     assert stored_files[0].parent == TEST_STORAGE_DIR    
 
+def test_list_files_limit():
+    client.post(
+        "/files",
+        files={"file": ("first.txt", b"first file", "text/plain")},
+    )
+    client.post(
+        "/files",
+        files={"file": ("second.txt", b"second file", "text/plain")},
+    )
+
+    response = client.get("/files?limit=1")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["items"]) == 1
+    assert data["limit"] == 1
+    assert data["offset"] == 0
+    assert data["total"] == 2
+
+def test_list_files_offset():
+    client.post(
+        "/files",
+        files={"file": ("first.txt", b"first file", "text/plain")},
+    )
+    client.post(
+        "/files",
+        files={"file": ("second.txt", b"second file", "text/plain")},
+    )
+
+    response = client.get("/files?limit=1&offset=1")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["items"]) == 1
+    assert data["offset"] == 1
+    assert data["total"] == 2
 
 
 
