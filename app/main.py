@@ -1,14 +1,12 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from app.database import Base, engine
-from app.models import File
+from app.database import engine
+
 from app.routes import router
 from app.schemas import HealthResponse
 
 app = FastAPI(title="CloudBox")
-
-Base.metadata.create_all(bind=engine)
 
 app.include_router(router)
 
