@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import pool
 
 from app.database import Base
-from app.models import File
+from app.models import File, User
 from app.config import settings
 
 from alembic import context

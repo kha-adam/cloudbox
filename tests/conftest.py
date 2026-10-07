@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv(".env.test", override=True)
 
+from alembic import command
+from alembic.config import Config
 
 from pathlib import Path
 
@@ -12,10 +14,12 @@ from app.database import Base, SessionLocal, engine
 from app.models import File
 from app.config import settings
 
+def run_migrations():
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
 TEST_STORAGE_DIR = Path(settings.storage_dir)
 TEST_STORAGE_DIR.mkdir(exist_ok=True)
-
-Base.metadata.create_all(bind=engine)
 
 def clean_test_data():
     db = SessionLocal()
