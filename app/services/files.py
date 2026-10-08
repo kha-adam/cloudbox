@@ -79,6 +79,24 @@ def get_file(file_id: int, owner_id: int) -> File | None:
     finally:
         db.close()
 
+def list_files(limit: int, offset: int, owner_id = int)->tuple[list[File], int]:
+    db = SessionLocal()
+
+    try:
+        total = db.query(File).filter(File.owner_id == owner_id).count()
+
+        files = (db.query(File)
+        .filter(File.owner_id == owner_id)
+        .order_by(File.created_at.desc(), File.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+        )
+        return files, total
+    
+    finally:
+        db.close()
+
 def delete_file_record(file_id: int, owner_id: int) -> None:
     db = SessionLocal()
 

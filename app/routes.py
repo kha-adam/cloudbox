@@ -3,12 +3,11 @@ from pathlib import Path
 from fastapi import APIRouter, File as FastAPIFile, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi import Depends
-from sqlalchemy import select, func
 
-from app.database import SessionLocal
 from app.config import settings
 from app.models import File, User
 from app.dependencies import get_current_user
+from app.services.files import list_files as list_files_service
 from app.services.files import (
     FileTooLargeError,
     save_uploaded_file,
@@ -71,102 +70,61 @@ async def upload_file(file: UploadFile = FastAPIFile(...),
 def list_files(limit: int = Query(default=50, ge=1, le=100), 
                offset: int = Query(default=0, ge=0),
                current_user: User = Depends(get_current_user)):
-    db = SessionLocal()
-
-    try:
-        total = db.scalar(select(func.count())
-                          .select_from(File)
-                          .where(File.owner_id == current_user.id))
-        statement = (
-            select(File)
-            .where(File.owner_id == current_user.id)
-            .order_by(File.created_at.desc(), File.id.desc())
-            .offset(offset)
-            .limit(limit)
-            )
-        results = db.execute(statement)
-
-        files = results.scalars().all()
-
-        return {
-            "items": [
-                {
-                    "id": file.id,
-                    "filename": file.filename,
-                    "size": file.size,
-                    "mime_type": file.mime_type,
-                    "sha256": file.sha256,
-                    "created_at": file.created_at,
-                } 
-                for file in files
-            ],
-            "limit": limit,
-            "offset": offset,
-            "total": total,
-            }
-    finally:
-        db.close()
+    files, total = list_files_service(owner_id=current_user.id,
+                                      limit=limit,
+                                      offset=offset,)
+    return {
+        "items": files,
+        "limit": limit,
+        "offset": offset,
+        "total": total,
+    }
 
 @router.get("/files/{file_id}/download")
 def download_file(file_id: int, current_user: User = Depends(get_current_user)):
-    db = SessionLocal()
+    file = get_file(file_id, current_user.id)
 
-    try:
-        file = get_file(file_id, current_user.id)
-
-        if file is None:
-            raise HTTPException(
-                status_code=404,
-                detail="File not found",
-            )
-        
-        storage_path = Path(file.storage_path)
-
-        if not storage_path.is_file():
-            raise HTTPException(
-                status_code=404,
-                detail="Stored file not found",
-            )
-
-        return FileResponse(
-            path=storage_path,
-            media_type=file.mime_type,
-            filename=file.filename
+    if file is None:
+        raise HTTPException(
+            status_code=404,
+            detail="File not found",
         )
-    finally:
-        db.close()
+    
+    storage_path = Path(file.storage_path)
+
+    if not storage_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Stored file not found",
+        )
+
+    return FileResponse(
+        path=storage_path,
+        media_type=file.mime_type,
+        filename=file.filename
+    )
 
 @router.delete("/files/{file_id}", response_model=DeleteFileResponse)
 def delete_file(file_id: int, current_user: User = Depends(get_current_user)):
-    db = SessionLocal()
+    file = get_file(file_id, current_user.id)
 
-    try:
-        file = get_file(file_id, current_user.id)
+    if file is None:
+        raise HTTPException(
+            status_code=404,
+            detail="File not found",
+        )
 
-        if file is None:
-            raise HTTPException(
-                status_code=404,
-                detail="File not found",
-            )
+    storage_path = Path(file.storage_path)
 
-        storage_path = Path(file.storage_path)
+    if storage_path.exists():
+        storage_path.unlink()
 
-        if storage_path.exists():
-            storage_path.unlink()
+    delete_file_record(file_id, current_user.id)
 
-        delete_file_record(file_id, current_user.id)
-
-        return {
-            "message": "File deleted",
-            "id": file_id,
-        }
-
-    except Exception:
-        db.rollback()
-        raise
-
-    finally:
-        db.close()
+    return {
+        "message": "File deleted",
+        "id": file_id,
+    }
 
 @router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)
 def register_user(user: UserRegisterRequest):
