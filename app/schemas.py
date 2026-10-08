@@ -37,3 +37,11 @@ class UserRegisterRequest(BaseModel):
 class UserRegisterResponse(BaseModel):
     id: int
     email: str
+
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class UserLoginResponse(BaseModel):
+    access_token: str
+    token_type: str

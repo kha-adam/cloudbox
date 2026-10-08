@@ -15,7 +15,7 @@ from app.services.files import (
     delete_file_record,
 )
 from app.services.users import get_user_by_email, create_user
-from app.security import hash_password, verify_password
+from app.security import hash_password, verify_password, create_access_token, decode_access_token
 from app.schemas import (
     DeleteFileResponse,
     FileMetadataResponse,
@@ -23,6 +23,8 @@ from app.schemas import (
     FileListResponse,
     UserRegisterRequest,
     UserRegisterResponse,
+    UserLoginRequest,
+    UserLoginResponse
 )
 router = APIRouter()
 
@@ -187,4 +189,32 @@ def register_user(user: UserRegisterRequest):
     return {
         "id": user_id,
         "email": email,
+    }
+
+@router.post("/auth/login", response_model=UserLoginResponse)
+def login_user(user: UserLoginRequest):
+    email = user.email.strip().lower()
+
+    existing_user = get_user_by_email(email)
+
+    if existing_user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    if not verify_password(
+        user.password,
+        existing_user.password_hash
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    access_token = create_access_token(existing_user.id)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
     }

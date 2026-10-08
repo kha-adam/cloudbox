@@ -1,8 +1,11 @@
 from app.database import SessionLocal
+from app.config import settings
 from app.models import User
-
-from fastapi.testclient import TestClient
 from app.main import app
+
+import jwt
+from fastapi.testclient import TestClient
+
 client = TestClient(app)
 
 def test_register_user():
@@ -77,3 +80,98 @@ def test_register_normalizes_email():
 
     assert response.status_code == 201
     assert response.json()["email"] == "adam@example.com"
+
+def test_login():
+    client.post(
+        "/auth/register",
+        json={
+            "email": "adam@example.com",
+            "password": "supersecret123",
+        },
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "adam@example.com",
+            "password": "supersecret123",
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["token_type"] == "bearer"
+    assert data["access_token"]
+
+def test_login_wrong_password():
+    client.post(
+        "/auth/register",
+        json={
+            "email": "adam@example.com",
+            "password": "supersecret123",
+        },
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "adam@example.com",
+            "password": "wrong-password",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid email or password"
+
+def test_login_wrong_password():
+    client.post(
+        "/auth/register",
+        json={
+            "email": "adam@example.com",
+            "password": "supersecret123",
+        },
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "adam@example.com",
+            "password": "wrong-password",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid email or password"
+
+def test_login_token_contains_user_id():
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "email": "adam@example.com",
+            "password": "supersecret123",
+        },
+    )
+
+    user_id = register_response.json()["id"]
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "adam@example.com",
+            "password": "supersecret123",
+        },
+    )
+
+    token = login_response.json()["access_token"]
+
+    payload = jwt.decode(
+        token,
+        settings.jwt_secret_key,
+        algorithms=[settings.jwt_algorithm],
+    )
+
+    assert payload["sub"] == str(user_id)
+    assert "exp" in payload
+

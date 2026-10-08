@@ -368,5 +368,3 @@ def test_list_files_offset():
     assert data["offset"] == 1
     assert data["total"] == 2
 
-
-
