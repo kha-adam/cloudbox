@@ -35,7 +35,8 @@ STORAGE_DIR = Path(settings.storage_dir)
 STORAGE_DIR.mkdir(exist_ok=True)
 
 @router.post("/files", response_model=FileUploadResponse)
-async def upload_file(file: UploadFile = FastAPIFile(...)):
+async def upload_file(file: UploadFile = FastAPIFile(...), 
+                      current_user: User = Depends(get_current_user)):
     try:
         filename, storage_path, file_size, file_hash = await save_uploaded_file(file, STORAGE_DIR, max_upload_size=settings.max_upload_size,)
 
@@ -47,6 +48,7 @@ async def upload_file(file: UploadFile = FastAPIFile(...)):
 
     try:
         file_id = create_file_record(
+            owner_id=current_user.id,
             filename=filename,
             file_size=file_size,
             mime_type=file.content_type or "application/octet-stream",
@@ -67,13 +69,17 @@ async def upload_file(file: UploadFile = FastAPIFile(...)):
 
 @router.get("/files", response_model=FileListResponse)
 def list_files(limit: int = Query(default=50, ge=1, le=100), 
-               offset: int = Query(default=0, ge=0)):
+               offset: int = Query(default=0, ge=0),
+               current_user: User = Depends(get_current_user)):
     db = SessionLocal()
 
     try:
-        total = db.scalar(select(func.count()).select_from(File))
+        total = db.scalar(select(func.count())
+                          .select_from(File)
+                          .where(File.owner_id == current_user.id))
         statement = (
             select(File)
+            .where(File.owner_id == current_user.id)
             .order_by(File.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -102,11 +108,11 @@ def list_files(limit: int = Query(default=50, ge=1, le=100),
         db.close()
 
 @router.get("/files/{file_id}/download")
-def download_file(file_id: int):
+def download_file(file_id: int, current_user: User = Depends(get_current_user)):
     db = SessionLocal()
 
     try:
-        file = get_file(file_id)
+        file = get_file(file_id, current_user.id)
 
         if file is None:
             raise HTTPException(
@@ -131,11 +137,11 @@ def download_file(file_id: int):
         db.close()
 
 @router.delete("/files/{file_id}", response_model=DeleteFileResponse)
-def delete_file(file_id: int):
+def delete_file(file_id: int, current_user: User = Depends(get_current_user)):
     db = SessionLocal()
 
     try:
-        file = get_file(file_id)
+        file = get_file(file_id, current_user.id)
 
         if file is None:
             raise HTTPException(
@@ -148,7 +154,7 @@ def delete_file(file_id: int):
         if storage_path.exists():
             storage_path.unlink()
 
-        delete_file_record(file_id)
+        delete_file_record(file_id, current_user.id)
 
         return {
             "message": "File deleted",

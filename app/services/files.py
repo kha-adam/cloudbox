@@ -41,11 +41,12 @@ async def save_uploaded_file(file: UploadFile, storage_dir: Path, max_upload_siz
 
     return filename, storage_path, file_size, sha256.hexdigest()
 
-def create_file_record(filename: str, file_size: int, mime_type: str, file_hash: str, storage_path: Path) -> int:
+def create_file_record(owner_id: int, filename: str, file_size: int, mime_type: str, file_hash: str, storage_path: Path) -> int:
     db = SessionLocal()
 
     try:
         statement = insert(File).values(
+            owner_id=owner_id,
             filename=filename,
             size=file_size,
             mime_type=mime_type,
@@ -65,11 +66,12 @@ def create_file_record(filename: str, file_size: int, mime_type: str, file_hash:
     finally:
         db.close()    
 
-def get_file(file_id: int) -> File | None:
+def get_file(file_id: int, owner_id: int) -> File | None:
     db = SessionLocal()
 
     try:
-        statement = select(File).where(File.id == file_id)
+        statement = select(File).where(File.id == file_id,
+                                        File.owner_id == owner_id)
         result = db.execute(statement)
 
         return result.scalar_one_or_none()
@@ -77,11 +79,12 @@ def get_file(file_id: int) -> File | None:
     finally:
         db.close()
 
-def delete_file_record(file_id: int) -> None:
+def delete_file_record(file_id: int, owner_id: int) -> None:
     db = SessionLocal()
 
     try:
-        statement = delete(File).where(File.id == file_id)
+        statement = delete(File).where(File.id == file_id,
+                                       File.owner_id == owner_id)
 
         db.execute(statement)
         db.commit()

@@ -9,6 +9,32 @@ from app.config import settings
 client = TestClient(app)
 
 TEST_STORAGE_DIR = Path(settings.storage_dir)
+def get_auth_headers(email = "test@example.com"):
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": "password123",
+        },
+    )
+
+    assert response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": email,
+            "password": "password123",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    return {
+        "Authorization": f"Bearer {token}",
+    }
 
 def test_health_check():
     response = client.get("/health")
@@ -20,7 +46,7 @@ def test_health_check():
     }
 
 def test_upload_file():
-
+    headers = get_auth_headers()
     content = b"Hello CloudBox!"
 
     response = client.post(
@@ -32,6 +58,7 @@ def test_upload_file():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     assert response.status_code == 200
@@ -61,6 +88,7 @@ def test_upload_file():
         db.close()
 
 def test_upload_and_download_file():
+    headers = get_auth_headers()
     content = b"Hello CloudBox!"
     
     upload_response = client.post(
@@ -72,6 +100,7 @@ def test_upload_and_download_file():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     assert upload_response.status_code == 200
@@ -79,7 +108,7 @@ def test_upload_and_download_file():
     file_id = upload_response.json()["id"]
 
     download_response = client.get(
-        f"files/{file_id}/download"
+        f"files/{file_id}/download", headers=headers,
     )
 
     assert download_response.status_code == 200
@@ -87,6 +116,7 @@ def test_upload_and_download_file():
     assert "hello.txt" in download_response.headers["content-disposition"]
 
 def test_list_files():
+    headers = get_auth_headers()
     first_content = b"First file"
     second_content = b"Second file"
 
@@ -99,6 +129,7 @@ def test_list_files():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     second_response = client.post(
@@ -110,11 +141,12 @@ def test_list_files():
                 "text/plain",
             )
         },
+        headers=headers,
     )
     assert first_response.status_code == 200
     assert second_response.status_code == 200
 
-    response = client.get("/files")
+    response = client.get("/files", headers=headers,)
 
     assert response.status_code == 200
 
@@ -130,6 +162,7 @@ def test_list_files():
     assert filenames == {"first.txt", "second.txt"}
 
 def test_delete_file():
+    headers = get_auth_headers()
     content = b"File to delete"
 
     upload_response = client.post(
@@ -141,6 +174,7 @@ def test_delete_file():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     assert upload_response.status_code == 200
@@ -162,7 +196,7 @@ def test_delete_file():
         db.close()
 
     delete_response = client.delete(
-        f"/files/{file_id}"
+        f"/files/{file_id}", headers=headers,
     )
 
     assert delete_response.status_code == 200
@@ -181,14 +215,16 @@ def test_delete_file():
     assert not storage_path.exists()
 
     download_response = client.get(
-        f"/files/{file_id}/download"
+        f"/files/{file_id}/download", headers=headers,
     )
 
     assert download_response.status_code == 404
 
 def test_download_nonexistant_file():
+    headers = get_auth_headers()
     response = client.get(
-        f"/files/99999/download"
+        f"/files/99999/download",
+        headers=headers,
     )
 
     assert response.status_code == 404
@@ -197,8 +233,10 @@ def test_download_nonexistant_file():
     }
 
 def test_delete_nonexistant_file():
+    headers = get_auth_headers()
     response = client.delete(
-            f"/files/99999"
+            f"/files/99999",
+            headers=headers,
         )
     
     assert response.status_code == 404
@@ -207,6 +245,7 @@ def test_delete_nonexistant_file():
     }
 
 def test_download_when_storage_file_is_missing():
+    headers = get_auth_headers()
     content = b"Temporary file"
 
     upload_response = client.post(
@@ -218,6 +257,7 @@ def test_download_when_storage_file_is_missing():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     assert upload_response.status_code == 200
@@ -239,7 +279,7 @@ def test_download_when_storage_file_is_missing():
     finally:
         db.close()   
 
-    response = client.get(f"files/{file_id}/download") 
+    response = client.get(f"files/{file_id}/download",headers=headers,) 
 
     assert response.status_code == 404
     assert response.json() == {
@@ -247,6 +287,7 @@ def test_download_when_storage_file_is_missing():
     }
 
 def test_upload_empty_file():
+    headers = get_auth_headers()
     content = b""
     response = client.post(
         "/files",
@@ -257,6 +298,7 @@ def test_upload_empty_file():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     assert response.status_code == 200
@@ -268,6 +310,7 @@ def test_upload_empty_file():
     assert len(data["sha256"]) == 64
 
 def test_upload_exceeding_file_limit_rejection():
+    headers = get_auth_headers()
     oversized_content = b"x" * (settings.max_upload_size + 1)
 
     response = client.post(
@@ -279,6 +322,7 @@ def test_upload_exceeding_file_limit_rejection():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     assert response.status_code == 413
@@ -301,6 +345,7 @@ def test_upload_exceeding_file_limit_rejection():
     assert stored_files == []
 
 def test_upload_doesnt_use_client_filename_as_storage_path():
+    headers = get_auth_headers()
     response = client.post(
         "/files",
         files={
@@ -310,6 +355,7 @@ def test_upload_doesnt_use_client_filename_as_storage_path():
                 "text/plain",
             )
         },
+        headers=headers,
     )
 
     assert response.status_code == 200
@@ -328,16 +374,19 @@ def test_upload_doesnt_use_client_filename_as_storage_path():
     assert stored_files[0].parent == TEST_STORAGE_DIR    
 
 def test_list_files_limit():
+    headers = get_auth_headers()
     client.post(
         "/files",
         files={"file": ("first.txt", b"first file", "text/plain")},
+        headers=headers,
     )
     client.post(
         "/files",
         files={"file": ("second.txt", b"second file", "text/plain")},
+        headers=headers,
     )
 
-    response = client.get("/files?limit=1")
+    response = client.get("/files?limit=1", headers=headers,)
 
     assert response.status_code == 200
 
@@ -349,16 +398,19 @@ def test_list_files_limit():
     assert data["total"] == 2
 
 def test_list_files_offset():
+    headers = get_auth_headers()
     client.post(
         "/files",
         files={"file": ("first.txt", b"first file", "text/plain")},
+        headers=headers,
     )
     client.post(
         "/files",
         files={"file": ("second.txt", b"second file", "text/plain")},
+        headers=headers,
     )
 
-    response = client.get("/files?limit=1&offset=1")
+    response = client.get("/files?limit=1&offset=1", headers=headers,)
 
     assert response.status_code == 200
 
@@ -368,3 +420,125 @@ def test_list_files_offset():
     assert data["offset"] == 1
     assert data["total"] == 2
 
+def test_users_only_see_their_own_files():
+    alice_headers = get_auth_headers(email="alice@example.com",)
+
+    bob_headers = get_auth_headers(email="bob@example.com")
+
+    alice_upload = client.post(
+        "/files",
+        files={
+            "file": (
+                "alice.txt",
+                b"alice file",
+                "text/plain",
+            )
+        },
+        headers=alice_headers,
+    )
+
+    bob_upload = client.post(
+        "/files",
+        files={
+            "file": (
+                "bob.txt",
+                b"bob file",
+                "text/plain",
+            )
+        },
+        headers=bob_headers,
+    )
+
+    assert alice_upload.status_code == 200
+    assert bob_upload.status_code == 200
+
+    alice_files = client.get(
+        "/files",
+        headers=alice_headers,
+    )
+
+    bob_files = client.get(
+        "/files",
+        headers=bob_headers,
+    )
+
+    assert alice_files.status_code == 200
+    assert bob_files.status_code == 200
+
+    alice_names = [
+        file["filename"]
+        for file in alice_files.json()["items"]
+    ]
+
+    bob_names = [
+        file["filename"]
+        for file in bob_files.json()["items"]
+    ]
+
+    assert alice_names == ["alice.txt"]
+    assert bob_names == ["bob.txt"]
+
+def test_user_cannot_download_another_users_file():
+    alice_headers = get_auth_headers(email="alice@example.com")
+
+    bob_headers = get_auth_headers(email="bob@example.com")
+
+    upload_response = client.post(
+        "/files",
+        files={
+            "file": (
+                "secret.txt",
+                b"alice secret",
+                "text/plain",
+            )
+        },
+        headers=alice_headers,
+    )
+
+    assert upload_response.status_code == 200
+
+    file_id = upload_response.json()["id"]
+
+    response = client.get(
+        f"/files/{file_id}/download",
+        headers=bob_headers,
+    )
+
+    assert response.status_code == 404
+
+def test_user_cannot_delete_another_users_file():
+    alice_headers = get_auth_headers(email="alice@example.com")
+
+    bob_headers = get_auth_headers(email="bob@example.com",)
+
+    upload_response = client.post(
+        "/files",
+        files={
+            "file": (
+                "important.txt",
+                b"do not delete",
+                "text/plain",
+            )
+        },
+        headers=alice_headers,
+    )
+
+    assert upload_response.status_code == 200
+
+    file_id = upload_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/files/{file_id}",
+        headers=bob_headers,
+    )
+
+    assert delete_response.status_code == 404
+
+    # Alice should still be able to access it.
+    download_response = client.get(
+        f"/files/{file_id}/download",
+        headers=alice_headers,
+    )
+
+    assert download_response.status_code == 200
+    assert download_response.content == b"do not delete"
