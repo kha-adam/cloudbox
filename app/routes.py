@@ -80,7 +80,7 @@ def list_files(limit: int = Query(default=50, ge=1, le=100),
         statement = (
             select(File)
             .where(File.owner_id == current_user.id)
-            .order_by(File.created_at.desc())
+            .order_by(File.created_at.desc(), File.id.desc())
             .offset(offset)
             .limit(limit)
             )

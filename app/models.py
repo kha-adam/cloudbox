@@ -21,7 +21,7 @@ class File(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True )
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=False )
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -34,7 +34,7 @@ class File(Base):
         nullable=False
     )
 
-    owner: Mapped["User | None"] = relationship(
+    owner: Mapped["User"] = relationship(
         back_populates="files",
     )
 
