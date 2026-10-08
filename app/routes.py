@@ -2,11 +2,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, File as FastAPIFile, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from fastapi import Depends
 from sqlalchemy import select, func
 
 from app.database import SessionLocal
 from app.config import settings
-from app.models import File
+from app.models import File, User
+from app.dependencies import get_current_user
 from app.services.files import (
     FileTooLargeError,
     save_uploaded_file,
@@ -24,7 +26,8 @@ from app.schemas import (
     UserRegisterRequest,
     UserRegisterResponse,
     UserLoginRequest,
-    UserLoginResponse
+    UserLoginResponse,
+    CurrentUserResponse,
 )
 router = APIRouter()
 
@@ -217,4 +220,11 @@ def login_user(user: UserLoginRequest):
     return {
         "access_token": access_token,
         "token_type": "bearer",
+    }
+
+@router.get("/auth/me", response_model=CurrentUserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
     }

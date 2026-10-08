@@ -37,7 +37,7 @@ def decode_access_token(token: str) -> str:
         algorithms=[settings.jwt_algorithm],
     )
 
-    user_id = payload.get["sub"]
+    user_id = payload.get("sub")
 
     if user_id is None:
         raise ValueError("Token missing subject")

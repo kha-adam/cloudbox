@@ -45,3 +45,7 @@ class UserLoginRequest(BaseModel):
 class UserLoginResponse(BaseModel):
     access_token: str
     token_type: str
+
+class CurrentUserResponse(BaseModel):
+    id: int
+    email: str

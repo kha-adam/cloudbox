@@ -25,13 +25,24 @@ def create_user(email: str, password_hash: str) -> int:
     finally:
         db.close()
 
-
 def get_user_by_email(email:str) -> User | None:
     db = SessionLocal()
 
     try:
         statement = select(User).where(User.email == email)
 
+        result = db.execute(statement)
+
+        return result.scalar_one_or_none()
+
+    finally:
+        db.close()
+
+def get_user_by_id(user_id: int) -> User | None:
+    db = SessionLocal()
+
+    try:
+        statement = select(User).where(User.id == user_id)
         result = db.execute(statement)
 
         return result.scalar_one_or_none()
