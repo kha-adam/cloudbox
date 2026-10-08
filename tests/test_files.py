@@ -1,12 +1,13 @@
 from pathlib import Path
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from app.database import SessionLocal
 from app.main import app
 from app.models import File
 from app.config import settings
 
-client = TestClient(app)
+client = TestClient(app, raise_server_exceptions=False)
 
 TEST_STORAGE_DIR = Path(settings.storage_dir)
 def get_auth_headers(email = "test@example.com"):
@@ -542,3 +543,40 @@ def test_user_cannot_delete_another_users_file():
 
     assert download_response.status_code == 200
     assert download_response.content == b"do not delete"
+
+def test_upload_cleans_up_file_when_database_insert_fails():
+    headers = get_auth_headers()
+
+    with patch(
+        "app.routes.create_file_record",
+        side_effect=RuntimeError("database failure"),
+    ):
+        response = client.post(
+            "/files",
+            files={
+                "file": (
+                    "test.txt",
+                    b"hello cloudbox",
+                    "text/plain",
+                )
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 500
+
+    response = client.get(
+        "/files",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+
+    stored_files = [
+        path
+        for path in TEST_STORAGE_DIR.iterdir()
+        if path.name != ".gitkeep"
+    ]
+
+    assert stored_files == []

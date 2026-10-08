@@ -104,28 +104,6 @@ def download_file(file_id: int, current_user: User = Depends(get_current_user)):
         filename=file.filename
     )
 
-@router.delete("/files/{file_id}", response_model=DeleteFileResponse)
-def delete_file(file_id: int, current_user: User = Depends(get_current_user)):
-    file = get_file(file_id, current_user.id)
-
-    if file is None:
-        raise HTTPException(
-            status_code=404,
-            detail="File not found",
-        )
-
-    storage_path = Path(file.storage_path)
-
-    if storage_path.exists():
-        storage_path.unlink()
-
-    delete_file_record(file_id, current_user.id)
-
-    return {
-        "message": "File deleted",
-        "id": file_id,
-    }
-
 @router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)
 def register_user(user: UserRegisterRequest):
     email=user.email.strip().lower()
