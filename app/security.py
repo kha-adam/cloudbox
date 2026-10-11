@@ -35,11 +35,17 @@ def decode_access_token(token: str) -> str:
         token,
         settings.jwt_secret_key,
         algorithms=[settings.jwt_algorithm],
+        options={"require":["sub", "exp"]}
     )
 
-    user_id = payload.get("sub")
+    user_id = payload["sub"]
 
-    if user_id is None:
-        raise ValueError("Token missing subject")
+    if not isinstance(user_id, str) or not user_id.isdecimal():
+        raise ValueError("Invalid token subject")
 
-    return int(user_id)
+    parsed_user_id = int(user_id)
+
+    if parsed_user_id <= 0:
+        raise ValueError("Invalid token subject")
+
+    return parsed_user_id

@@ -2,6 +2,12 @@ from app.security import create_access_token
 from app.services.users import create_user
 from app.security import hash_password
 from app.main import app
+from app.config import settings
+
+from datetime import datetime, timedelta, UTC
+import jwt
+
+
 
 from fastapi.testclient import TestClient
 
@@ -74,3 +80,30 @@ def test_current_user_with_tampered_token():
     )
 
     assert response.status_code == 401
+
+def test_protected_endpoint_rejects_expired_token():
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "exp": datetime.now(UTC) - timedelta(minutes=1),
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or expired token"
+
+def test_protected_endpoint_rejects_malformed_token():
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": "Bearer not-a-valid-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or expired token"

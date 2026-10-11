@@ -16,12 +16,11 @@ def get_current_user(
     try: 
         user_id = decode_access_token(token)
     except (jwt.InvalidTokenError, ValueError, TypeError) as exc:
-        print("JWT ERROR: ", repr(exc))
         raise HTTPException(
             status_code=401,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-            )
+            ) from exc
 
     user = get_user_by_id(user_id)
 
