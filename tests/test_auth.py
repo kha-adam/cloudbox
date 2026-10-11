@@ -175,3 +175,36 @@ def test_login_token_contains_user_id():
     assert payload["sub"] == str(user_id)
     assert "exp" in payload
 
+def test_register_rejects_invalid_email():
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "not-an-email",
+            "password": "password123",
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_register_rejects_short_password():
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "short",
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_register_accepts_eight_character_password():
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "12345678",
+        },
+    )
+
+    assert response.status_code == 201
+

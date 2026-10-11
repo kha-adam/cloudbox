@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 class HealthResponse(BaseModel):
     status: str
@@ -31,8 +31,8 @@ class FileListResponse(BaseModel):
     total: int
 
 class UserRegisterRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=8)
 
 class UserRegisterResponse(BaseModel):
     id: int

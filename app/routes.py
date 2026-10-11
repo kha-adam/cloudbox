@@ -128,18 +128,7 @@ def delete_file(file_id: int, current_user: User = Depends(get_current_user)):
 
 @router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)
 def register_user(user: UserRegisterRequest):
-    email=user.email.strip().lower()
-
-    if not email:
-        raise HTTPException(
-            status_code=400,
-            detail="Email is required"
-        )
-    if not user.password:
-        raise HTTPException(
-            status_code=400,
-            detail="Password is required",
-        )
+    email = str(user.email).strip().lower()
 
     existing_user = get_user_by_email(email)
 
