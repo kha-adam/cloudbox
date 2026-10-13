@@ -2,11 +2,13 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.database import engine
-
 from app.routes import router
 from app.schemas import HealthResponse
+from app.middleware import RequestBodyLimitMiddleware
 
 app = FastAPI(title="CloudBox")
+
+app.add_middleware(RequestBodyLimitMiddleware, max_body_size=105 * 1024 * 1024)
 
 app.include_router(router)
 
