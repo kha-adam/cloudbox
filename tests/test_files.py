@@ -363,7 +363,8 @@ def test_upload_doesnt_use_client_filename_as_storage_path():
 
     data = response.json()
 
-    assert data["filename"] == "../../outside.txt"
+    assert data["filename"] == "outside.txt"
+
     stored_files = [
         path
         for path in TEST_STORAGE_DIR.iterdir()
@@ -372,7 +373,8 @@ def test_upload_doesnt_use_client_filename_as_storage_path():
 
     assert len(stored_files) == 1
     assert stored_files[0].name != "../../outside.txt"
-    assert stored_files[0].parent == TEST_STORAGE_DIR    
+    assert stored_files[0].parent == TEST_STORAGE_DIR 
+    assert stored_files[0].read_bytes() == b"secret data"   
 
 def test_list_files_limit():
     headers = get_auth_headers()

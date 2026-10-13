@@ -14,7 +14,7 @@ class FileTooLargeError(Exception):
     pass
 
 async def save_uploaded_file(file: UploadFile, storage_dir: Path, max_upload_size) -> tuple[str, Path, int, str]:
-    filename = file.filename or "unnamed"
+    filename = Path(file.filename or "unnamed").name
 
     storage_filename = str(uuid.uuid4())
     storage_path = storage_dir / storage_filename
@@ -27,15 +27,15 @@ async def save_uploaded_file(file: UploadFile, storage_dir: Path, max_upload_siz
                 file_size += len(chunk)
 
                 if file_size > max_upload_size:
-                    storage_path.unlink()
-                    await file.close()
                     raise FileTooLargeError("File exceeds maximum allowed size")
             
                 sha256.update(chunk)
                 output_file.write(chunk)
+
     except Exception:
         storage_path.unlink(missing_ok=True)
         raise
+
     finally:
         await file.close()
 
