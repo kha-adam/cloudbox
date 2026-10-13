@@ -1,10 +1,12 @@
 from pathlib import Path
-from fastapi.testclient import TestClient
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
+from fastapi.testclient import TestClient
+
 
 from app.database import SessionLocal
 from app.main import app
-from app.models import File
+from app.models import File, User
 from app.config import settings
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -36,6 +38,14 @@ def get_auth_headers(email = "test@example.com"):
     return {
         "Authorization": f"Bearer {token}",
     }
+
+def get_user_storage_used(email="test@example.com"):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).one()
+        return user.storage_used
+    finally:
+        db.close()
 
 def test_health_check():
     response = client.get("/health")
@@ -546,7 +556,7 @@ def test_user_cannot_delete_another_users_file():
     assert download_response.status_code == 200
     assert download_response.content == b"do not delete"
 
-def test_upload_cleans_up_file_when_database_insert_fails():
+def test_upload_cleans_up_file_when_database_service_fails():
     headers = get_auth_headers()
 
     with patch(
@@ -582,3 +592,121 @@ def test_upload_cleans_up_file_when_database_insert_fails():
     ]
 
     assert stored_files == []
+
+def test_upload_increases_user_storage_usage():
+    headers = get_auth_headers()
+
+    response = client.post(
+        "/files",
+        files={"file": ("small.txt", b"hello", "text/plain")},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["size"] == 5
+    assert get_user_storage_used() == 5
+
+def test_upload_exceeding_user_quota_is_rejected(monkeypatch):
+    monkeypatch.setattr(settings, "max_storage_per_user", 5)
+
+    headers = get_auth_headers()
+
+    response = client.post(
+        "/files",
+        files={"file": ("too-large-for-quota.txt", b"123456", "text/plain")},
+        headers=headers,
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "User storage quota exceeded"
+    assert get_user_storage_used() == 0
+
+    db = SessionLocal()
+    try:
+        assert db.query(File).count() == 0
+    finally:
+        db.close()
+
+def test_deleting_file_releases_user_storage():
+    headers = get_auth_headers()
+
+    upload_response = client.post(
+        "/files",
+        files={"file": ("small.txt", b"hello", "text/plain")},
+        headers=headers,
+    )
+
+    assert upload_response.status_code == 200
+    file_id = upload_response.json()["id"]
+    assert get_user_storage_used() == 5
+
+    delete_response = client.delete(
+        f"/files/{file_id}",
+        headers=headers,
+    )
+
+    assert delete_response.status_code == 200
+    assert get_user_storage_used() == 0
+
+def test_concurrent_uploads_cannot_exceed_user_quota(monkeypatch):
+    monkeypatch.setattr(settings, "max_storage_per_user", 5)
+    headers = get_auth_headers()
+
+    def upload(content):
+        return client.post(
+            "/files",
+            files={"file": ("test.txt", content, "text/plain")},
+            headers=headers,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(upload, [b"1234", b"5678"]))
+
+    assert sorted(response.status_code for response in responses) == [200, 413]
+    assert get_user_storage_used() == 4
+
+    db = SessionLocal()
+    try:
+        files = db.query(File).all()
+        assert len(files) == 1
+        assert files[0].size == 4
+    finally:
+        db.close()
+
+def test_upload_rolls_back_quota_and_cleans_up_file_when_insert_fails():
+    headers = get_auth_headers()
+
+    with patch(
+        "app.services.files.insert",
+        side_effect=RuntimeError("database failure"),
+    ):
+        response = client.post(
+            "/files",
+            files={
+                "file": (
+                    "test.txt",
+                    b"hello cloudbox",
+                    "text/plain",
+                )
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 500
+
+    response = client.get("/files", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+
+    # The quota reservation must have rolled back.
+    assert get_user_storage_used() == 0
+
+    stored_files = [
+        path
+        for path in TEST_STORAGE_DIR.iterdir()
+        if path.name != ".gitkeep"
+    ]
+
+    assert stored_files == []
+

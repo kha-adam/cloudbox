@@ -4,13 +4,15 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
-from sqlalchemy import insert, select, delete
+from sqlalchemy import insert, select, delete, update
 from app.database import SessionLocal
-from app.models import File
+from app.models import File, User
 
 CHUNK_SIZE = 1024 * 1024
 
 class FileTooLargeError(Exception):
+    pass
+class StorageQuotaExceededError(Exception):
     pass
 
 async def save_uploaded_file(file: UploadFile, storage_dir: Path, max_upload_size) -> tuple[str, Path, int, str]:
@@ -41,10 +43,18 @@ async def save_uploaded_file(file: UploadFile, storage_dir: Path, max_upload_siz
 
     return filename, storage_path, file_size, sha256.hexdigest()
 
-def create_file_record(owner_id: int, filename: str, file_size: int, mime_type: str, file_hash: str, storage_path: Path) -> int:
+def create_file_record(owner_id: int, filename: str, file_size: int, mime_type: str, file_hash: str, storage_path: Path, max_storage_size: int) -> int:
     db = SessionLocal()
 
     try:
+        reservation = db.execute(update(User)
+                                 .where(User.id == owner_id, User.storage_used + file_size <= max_storage_size)
+                                 .values(storage_used = User.storage_used + file_size)
+                                 .returning(User.id))
+        if reservation.scalar_one_or_none() is None:
+            raise StorageQuotaExceededError(
+                "User storage quota exceeded"
+            )
         statement = insert(File).values(
             owner_id=owner_id,
             filename=filename,
@@ -101,11 +111,33 @@ def delete_file_record(file_id: int, owner_id: int) -> None:
     db = SessionLocal()
 
     try:
-        statement = delete(File).where(File.id == file_id,
-                                       File.owner_id == owner_id)
+        user = (db.query(User)
+                .filter(User.id == owner_id)
+                .with_for_update()
+                .one_or_none())
+        
+        if user is None:
+            db.rollback()
+            return None
+        
+        file = (db.query(File)
+                .filter(File.id == file_id, File.owner_id == owner_id)
+                .with_for_update()
+                .one_or_none()
+                )
 
-        db.execute(statement)
+        if file is None:
+            db.rollback()
+            return None
+
+        storage_path = file.storage_path
+
+        user.storage_used -= file.size
+
+        db.delete(file)
         db.commit()
+
+        return storage_path
 
     except Exception:
         db.rollback()

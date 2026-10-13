@@ -8,6 +8,7 @@ from app.config import settings
 from app.models import File, User
 from app.dependencies import get_current_user
 from app.services.files import list_files as list_files_service
+from app.services.files import StorageQuotaExceededError
 from app.services.files import (
     FileTooLargeError,
     save_uploaded_file,
@@ -53,18 +54,25 @@ async def upload_file(file: UploadFile = FastAPIFile(...),
             mime_type=file.content_type or "application/octet-stream",
             file_hash=file_hash,
             storage_path=storage_path,
+            max_storage_size=settings.max_storage_per_user
         )
-
-        return {
-            "id": file_id,
-            "filename": filename,
-            "size": file_size,
-            "sha256": file_hash,
-        }
+    except StorageQuotaExceededError as exc:
+        storage_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=413,
+            detail=str(exc),
+        ) from exc
 
     except Exception:
         storage_path.unlink(missing_ok=True)
         raise
+    return {
+        "id": file_id,
+        "filename": filename,
+        "size": file_size,
+        "sha256": file_hash,
+    }
+
 
 @router.get("/files", response_model=FileListResponse)
 def list_files(limit: int = Query(default=50, ge=1, le=100), 
@@ -106,20 +114,25 @@ def download_file(file_id: int, current_user: User = Depends(get_current_user)):
 
 @router.delete("/files/{file_id}", response_model=DeleteFileResponse)
 def delete_file(file_id: int, current_user: User = Depends(get_current_user)):
-    file = get_file(file_id, current_user.id)
+    storage_path = delete_file_record(file_id=file_id, owner_id=current_user.id)
 
-    if file is None:
+    if storage_path is None:
         raise HTTPException(
             status_code=404,
             detail="File not found",
         )
 
-    storage_path = Path(file.storage_path)
+    path = Path(storage_path)
 
-    if storage_path.exists():
-        storage_path.unlink()
+    try:
+        path.unlink(missing_ok=True)
 
-    delete_file_record(file_id, current_user.id)
+    except OSError:
+        import logging
+
+        logging .getLogger(__name__).exception(
+            "Could not remove stored file %s", path
+        )
 
     return {
         "message": "File deleted",

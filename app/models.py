@@ -12,6 +12,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False,)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False,)
     created_at: Mapped[DateTime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False,)
+    storage_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     files: Mapped[list["File"]] = relationship(back_populates="owner")
     
