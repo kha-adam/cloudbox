@@ -63,7 +63,8 @@ class RequestBodyLimitMiddleware:
         try:
             await self.app(scope, limited_receive, guarded_send)
         except RequestBodyTooLarge:
-            pass
+            if response_started:
+                raise
 
     async def _reject(self, send):
         await send({
