@@ -1,15 +1,19 @@
 import os
+import csv
 import time
 import httpx
 import statistics
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 URL = "http://localhost:8000/files"
+TOKEN = os.environ["CLOUDBOX_TOKEN"]
+CSV_PATH = "benchmarks/concurrency_results_auto.csv"
 
 REQUESTS = 100
-TOKEN = os.environ["CLOUDBOX_TOKEN"]
 CONCURRENCY_LEVELS = [1, 5, 10]
 
+all_results = []
 
 def make_request(client):
     start = time.perf_counter()
@@ -62,3 +66,29 @@ for concurrency in CONCURRENCY_LEVELS:
         print(f"p50 latency: {statistics.median(ordered):.2f} ms")
         print(f"p95 latency: {statistics.quantiles(ordered, n=100)[94]:.2f} ms")
         print(f"p99 latency: {statistics.quantiles(ordered, n=100)[98]:.2f} ms")
+
+    all_results.append({
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "concurrency": concurrency,
+        "requests": REQUESTS,
+        "successes": len(latencies),
+        "errors": errors,
+        "throughput_rps": round(REQUESTS / elapsed_seconds, 2),
+        "avg_ms": round(statistics.mean(latencies), 2),
+        "p50_ms": round(statistics.median(latencies), 2),
+        "p95_ms": round(statistics.quantiles(latencies, n=100)[94], 2),
+        "p99_ms": round(statistics.quantiles(latencies, n=100)[98], 2),
+    })
+
+
+with open(CSV_PATH, 'a', newline="") as csvfile:
+    fieldnames = all_results[0].keys()
+
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+    if csvfile.tell() == 0:
+        writer.writeheader()
+
+    writer.writerows(all_results)
+
+print(f"\nResults appended to {CSV_PATH}")
