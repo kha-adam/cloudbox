@@ -168,7 +168,7 @@ def create_upload_session(owner_id: int, filename: str, total_size: int, mime_ty
         raise ValueError("Upload size must be positive")
 
     if total_size > max_upload_size:
-        raise ValueError("File exceeds maximum allowed size")
+        raise FileTooLargeError("File exceeds maximum allowed size")
 
     chunk_size = RESUMABLE_CHUNK_SIZE
     total_chunks = int(math.ceil(total_size / chunk_size))

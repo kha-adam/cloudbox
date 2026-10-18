@@ -206,7 +206,7 @@ async def upload_chunk(
 
     except InvalidChunkError as exc:
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail=str(exc),
         ) from exc
 

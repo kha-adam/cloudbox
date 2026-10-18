@@ -5,13 +5,12 @@ from fastapi.testclient import TestClient
 
 
 from app.database import SessionLocal
-from app.main import app
 from app.models import File, User
 from app.config import settings
 
-client = TestClient(app, raise_server_exceptions=False)
+from tests.helpers import get_auth_headers, client
+from tests.conftest import TEST_STORAGE_DIR
 
-TEST_STORAGE_DIR = Path(settings.storage_dir)
 def get_auth_headers(email = "test@example.com"):
     response = client.post(
         "/auth/register",

@@ -1,17 +1,12 @@
 from app.security import create_access_token
 from app.services.users import create_user
 from app.security import hash_password
-from app.main import app
 from app.config import settings
 
 from datetime import datetime, timedelta, UTC
 import jwt
 
-
-
-from fastapi.testclient import TestClient
-
-client = TestClient(app)
+from tests.helpers import client
 
 def test_current_user_with_valid_token():
     response = client.post(
@@ -39,12 +34,10 @@ def test_current_user_with_valid_token():
         "email": "me@example.com",
     }
 
-
 def test_current_user_without_token():
     response = client.get("/auth/me")
 
     assert response.status_code == 401
-
 
 def test_current_user_with_invalid_token():
     response = client.get(
@@ -56,7 +49,6 @@ def test_current_user_with_invalid_token():
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid or expired token"
-
 
 def test_current_user_with_tampered_token():
     response = client.post(

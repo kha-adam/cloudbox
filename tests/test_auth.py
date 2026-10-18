@@ -3,10 +3,9 @@ from app.config import settings
 from app.models import User
 from app.main import app
 
-import jwt
-from fastapi.testclient import TestClient
+from tests.helpers import client
 
-client = TestClient(app)
+import jwt
 
 def test_register_user():
     response = client.post(
