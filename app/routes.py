@@ -15,6 +15,7 @@ from app.services.files import (
     create_file_record,
     get_file,
     delete_file_record,
+    create_upload_session,
 )
 from app.services.users import get_user_by_email, create_user
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
@@ -28,6 +29,8 @@ from app.schemas import (
     UserLoginRequest,
     UserLoginResponse,
     CurrentUserResponse,
+    UploadSessionCreateRequest,
+    UploadSessionResponse,
 )
 router = APIRouter()
 
@@ -137,6 +140,27 @@ def delete_file(file_id: int, current_user: User = Depends(get_current_user)):
         "message": "File deleted",
         "id": file_id,
     }
+
+@router.post("/uploads", response_model=UploadSessionResponse, status_code=201)
+def start_upload(request:UploadSessionCreateRequest, current_user: User = Depends(get_current_user)):
+    try:
+        return create_upload_session(owner_id=current_user.id, filename=request.filename, total_size=request.total_size, mime_type=request.mime_type, max_upload_size=settings.max_upload_size, max_storage_size=settings.max_storage_per_user)
+    except FileTooLargeError as exc:
+        raise HTTPException(
+            status_code=413,
+            detail=str(exc),
+        ) from exc
+    except StorageQuotaExceededError as exc:
+        raise HTTPException(
+            status_code=413,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
 
 @router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)
 def register_user(user: UserRegisterRequest):
