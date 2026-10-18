@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File as FastAPIFile, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from app.config import settings
 from app.models import File, User
@@ -11,6 +11,11 @@ from app.services.files import list_files as list_files_service
 from app.services.files import StorageQuotaExceededError
 from app.services.files import (
     FileTooLargeError,
+    UploadSessionNotFoundError,
+    UploadSessionExpiredError,
+    ChunkConflictError,
+    InvalidChunkError,
+    save_upload_chunk,
     save_uploaded_file,
     create_file_record,
     get_file,
@@ -161,6 +166,47 @@ def start_upload(request:UploadSessionCreateRequest, current_user: User = Depend
             detail=str(exc),
         ) from exc
 
+@router.put("/uploads/{upload_id}/chunks/{chunk_index}")
+async def upload_chunk(
+    upload_id: str,
+    chunk_index: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    upload_dir = STORAGE_DIR / "uploads"
+
+    try:
+        return await save_upload_chunk(
+            owner_id=current_user.id,
+            upload_id=upload_id,
+            chunk_index=chunk_index,
+            body=request.stream(),
+            upload_dir=upload_dir,
+        )
+
+    except UploadSessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Upload session not found",
+        ) from exc
+
+    except UploadSessionExpiredError as exc:
+        raise HTTPException(
+            status_code=410,
+            detail="Upload session has expired",
+        ) from exc
+
+    except ChunkConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    except InvalidChunkError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
 
 @router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)
 def register_user(user: UserRegisterRequest):

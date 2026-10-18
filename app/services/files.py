@@ -249,9 +249,9 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
             session.total_size-chunk_index*session.chunk_size,
         )
 
-        chunk_size = session.chunk_size
+        # chunk_size = session.chunk_size
 
-        total_chunks = session.total_chunks
+        # total_chunks = session.total_chunks
 
     finally:
         db.close()
@@ -259,7 +259,7 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
     upload_path = upload_dir / upload_id
     upload_path.mkdir(parents=True, exist_ok=True)
     destination = upload_path / f"{chunk_index}.chunk"
-    temporary = upload_path / f".{uuid.uuid()}.tmp"
+    temporary = upload_path / f".{uuid.uuid4()}.tmp"
 
     digest = hashlib.sha256()
 
@@ -268,16 +268,17 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
     try:
         with temporary.open("xb") as output:
             async for data in body:
+                print("DEBUG: service received chunk =", len(data))
                 if not data:
                     continue
 
-            received_size += len(data)
+                received_size += len(data)
 
-            if received_size > expected_size:
-                raise InvalidChunkError("chunk exceeds expected size")
+                if received_size > expected_size:
+                    raise InvalidChunkError("Chunk exceeds expected size")
 
-            digest.update(data)
-            output.write(data)
+                digest.update(data)
+                output.write(data)
 
         if received_size != expected_size:
             raise InvalidChunkError(f"Expected {expected_size} bytes, received {received_size}")
@@ -314,9 +315,9 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
                         existing_hash.update(data)
 
                 if existing_hash.hexdigest()!= chunk_hash:
-                    raise ChunkConflictError("this chunk index already contains different data")
-                else:
-                    temporary.replace(destination)
+                    raise ChunkConflictError("This chunk index already contains different data")
+            else:
+                temporary.replace(destination)
 
                 db.commit()
 
