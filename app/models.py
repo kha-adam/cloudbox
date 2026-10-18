@@ -49,7 +49,7 @@ class UploadSession(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     total_size: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    total_chunk: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_chunks: Mapped[int] = mapped_column(Integer, nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False, default="application/octet-stream")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="in-progress")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default= lambda: datetime.now(UTC))

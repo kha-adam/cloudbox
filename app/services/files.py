@@ -162,7 +162,7 @@ def create_upload_session(owner_id: int, filename: str, total_size: int, mime_ty
         raise ValueError("File exceeds maximum allowed size")
 
     chunk_size = RESUMABLE_CHUNK_SIZE
-    total_chunks = math.ceil(total_size / chunk_size)
+    total_chunks = int(math.ceil(total_size / chunk_size))
     upload_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     expires_at = now + UPLOAD_SESSION_TTL
