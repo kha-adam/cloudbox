@@ -1,9 +1,7 @@
 from pathlib import Path
-from fastapi.testclient import TestClient
 import hashlib
 
 from app.database import SessionLocal
-from app.main import app
 from app.models import File, User, UploadSession
 from app.config import settings
 from app.database import SessionLocal
@@ -434,4 +432,100 @@ def test_upload_chunk_cannot_be_uploaded_by_another_user():
 
     chunk_path = TEST_STORAGE_DIR / "uploads" / upload_id / "0.chunk"
     assert not chunk_path.exists()
+
+def test_complete_upload_creates_file_record():
+    headers = get_auth_headers()
+    content = b"CloudBox completion test"
+
+    # 1. Create the upload session.
+    session_response = client.post(
+        "/uploads",
+        json={
+            "filename": "completed.txt",
+            "total_size": len(content),
+            "mime_type": "text/plain",
+        },
+        headers=headers,
+    )
+    assert session_response.status_code == 201, session_response.json()
+    upload_id = session_response.json()["upload_id"]
+
+    # 2. Upload the only chunk.
+    chunk_response = client.put(
+        f"/uploads/{upload_id}/chunks/0",
+        content=content,
+        headers=headers,
+    )
+    assert chunk_response.status_code == 200, chunk_response.json()
+
+    # 3. Complete the upload.
+    response = client.post(
+        f"/uploads/{upload_id}/complete",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.json()
+    data = response.json()
+
+    assert data["filename"] == "completed.txt"
+    assert data["size"] == len(content)
+    assert data["sha256"] == hashlib.sha256(content).hexdigest()
+
+    # 4. Verify the database and storage.
+    db = SessionLocal()
+    try:
+        file_record = db.get(File, data["id"])
+        assert file_record is not None
+        assert file_record.filename == "completed.txt"
+        assert file_record.size == len(content)
+        assert file_record.sha256 == hashlib.sha256(content).hexdigest()
+        assert file_record.owner_id is not None
+
+        user = db.get(User, file_record.owner_id)
+        assert user is not None
+        assert user.storage_used == len(content)
+        assert user.reserved_storage == 0
+
+        upload_session = db.get(UploadSession, upload_id)
+        assert upload_session is not None
+        assert upload_session.status == "completed"
+
+        final_path = Path(file_record.storage_path)
+        assert final_path.is_file()
+        assert final_path.read_bytes() == content
+    finally:
+        db.close()
+
+def test_complete_upload_rejects_missing_chunks():
+    headers = get_auth_headers()
+    total_size = 6 * 1024 * 1024  # Requires two chunks at 5 MiB each.
+
+    session_response = client.post(
+        "/uploads",
+        json={
+            "filename": "incomplete.bin",
+            "total_size": total_size,
+            "mime_type": "application/octet-stream",
+        },
+        headers=headers,
+    )
+    assert session_response.status_code == 201, session_response.json()
+    upload_id = session_response.json()["upload_id"]
+
+    chunk_size = 5 * 1024 * 1024
+    chunk_response = client.put(
+        f"/uploads/{upload_id}/chunks/0",
+        content=b"A" * chunk_size,
+        headers=headers,
+    )
+    assert chunk_response.status_code == 200, chunk_response.json()
+
+    # Completion must fail because chunk 1 is missing.
+    response = client.post(
+        f"/uploads/{upload_id}/complete",
+        headers=headers,
+    )
+    print(response)
+    assert response.status_code == 400
+    assert "Missing chunk 1" in response.json()["detail"]
 

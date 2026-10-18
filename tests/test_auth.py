@@ -1,9 +1,8 @@
 from app.database import SessionLocal
 from app.config import settings
 from app.models import User
-from app.main import app
 
-from tests.helpers import client
+from tests.conftest import client
 
 import jwt
 

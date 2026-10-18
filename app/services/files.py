@@ -249,10 +249,6 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
             session.total_size-chunk_index*session.chunk_size,
         )
 
-        # chunk_size = session.chunk_size
-
-        # total_chunks = session.total_chunks
-
     finally:
         db.close()
 
@@ -268,7 +264,6 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
     try:
         with temporary.open("xb") as output:
             async for data in body:
-                print("DEBUG: service received chunk =", len(data))
                 if not data:
                     continue
 
@@ -400,3 +395,137 @@ def get_upload_status(
 
     finally:
         db.close()
+
+def validate_upload_chunks(session: UploadSession, upload_dir: Path) -> list[Path]:
+    session_dir = upload_dir / session.id
+    chunk_paths = []
+
+    for index in range(session.total_chunks):
+        chunk_path = session_dir / f"{index}.chunk"
+
+        if not chunk_path.is_file():
+            raise InvalidChunkError(f"Missing chunk {index}")
+
+        expected_size = min(session.chunk_size, session.total_size - index * session.chunk_size)
+
+        if chunk_path.stat().st_size != expected_size:
+            raise InvalidChunkError(f"Chunk {index} has incorrect size")
+
+        chunk_paths.append(chunk_path)
+
+    return chunk_paths
+
+def complete_upload(owner_id: int, upload_id: str, upload_dir: Path, storage_dir: Path) -> dict:
+    db = SessionLocal()
+    temporary = None
+    final_path = None
+    moved_final_file = False
+
+    try:
+        session = db.execute(
+            select(UploadSession)
+            .where(UploadSession.id == upload_id, UploadSession.owner_id == owner_id)
+            .with_for_update()
+        ).scalar_one_or_none()
+
+        if session is None:
+            raise UploadSessionNotFoundError()
+
+        if session.status == "completed":
+            file_record = db.execute(
+                select(File)
+                .where(File.owner_id == owner_id, File.storage_path == str(storage_dir / upload_id / session.filename),)
+            ).scalar_one_or_none()
+
+            if file_record is None:
+                raise InvalidChunkError("Upload is marked completed but its file record is missing")
+            return {
+            "id": file_record.id,
+            "filename": file_record.filename,
+            "size": file_record.size,
+            "sha256": file_record.sha256,
+            }
+
+        now = datetime.now(UTC)
+        expires_at = session.expires_at
+
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+
+        if expires_at <= now:
+            raise UploadSessionExpiredError()
+
+        if session.status != "in_progress":
+            raise InvalidChunkError("Upload session is not active")
+
+        chunk_paths = validate_upload_chunks(session, upload_dir)
+
+        storage_dir.mkdir(parents=True, exist_ok=True)
+
+        final_path = storage_dir / f"{upload_id}"
+        # final_path = storage_dir / f"{upload_id}-{session.filename}"
+
+        temporary = storage_dir / f".{upload_id}.{uuid.uuid4()}.tmp"
+
+        digest = hashlib.sha256()
+
+        assembled_size = 0
+
+        with temporary.open("xb") as output:
+            for chunk_path in chunk_paths:
+                with chunk_path.open("rb") as chunk:
+                    while data := chunk.read(1024 * 1024):
+                        output.write(data)
+                        digest.update(data)
+                        assembled_size += len(data)
+        if assembled_size != session.total_size:
+            raise InvalidChunkError("Assembled file size does not atch expected size")
+
+        final_hash = digest.hexdigest()
+
+        user = db.execute(
+            select(User)
+            .where(User.id == owner_id)
+            .with_for_update()
+        ).scalar_one()
+
+        final_path.parent.mkdir(parents=True, exist_ok = True)
+        temporary.replace(final_path)
+
+        moved_final_file = True
+
+        file_record = File(
+            owner_id=owner_id,
+            filename=session.filename,
+            size = assembled_size,
+            mime_type=session.mime_type,
+            sha256=final_hash,
+            storage_path=str(final_path),
+        )
+        db.add(file_record)
+
+        user.storage_used += assembled_size
+        user.reserved_storage -= session.total_size
+        session.status = "completed"
+
+        db.commit()
+        db.refresh(file_record)
+
+        return {
+            "id": file_record.id,
+            "filename": file_record.filename,
+            "size": file_record.size,
+            "sha256": file_record.sha256,
+        }
+
+    except Exception:
+        db.rollback()
+
+        if moved_final_file and final_path is not None:
+            final_path.unlink(missing_ok=True)
+        raise
+
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        db.close

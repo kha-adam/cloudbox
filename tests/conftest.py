@@ -3,6 +3,7 @@ import pytest
 import shutil
 from pathlib import Path
 from dotenv import load_dotenv
+from fastapi.testclient import TestClient
 
 load_dotenv(".env.test", override=True)
 
@@ -14,6 +15,10 @@ from pathlib import Path
 from app.database import Base, SessionLocal, engine
 from app.models import File, User, UploadSession
 from app.config import settings
+from app.main import app
+
+
+client = TestClient(app, raise_server_exceptions=True)
 
 def run_migrations():
     alembic_cfg = Config("alembic.ini")

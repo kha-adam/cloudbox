@@ -6,7 +6,7 @@ from app.config import settings
 from datetime import datetime, timedelta, UTC
 import jwt
 
-from tests.helpers import client
+from tests.conftest import client
 
 def test_current_user_with_valid_token():
     response = client.post(

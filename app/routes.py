@@ -15,6 +15,7 @@ from app.services.files import (
     UploadSessionExpiredError,
     ChunkConflictError,
     InvalidChunkError,
+    complete_upload,
     get_upload_status,
     save_upload_chunk,
     save_uploaded_file,
@@ -225,6 +226,37 @@ def upload_status(
         raise HTTPException(
             status_code=404,
             detail="Upload session not found",
+        ) from exc
+
+@router.post("/uploads/{upload_id}/complete")
+def finish_upload(
+    upload_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return complete_upload(
+            owner_id=current_user.id,
+            upload_id=upload_id,
+            upload_dir=STORAGE_DIR / "uploads",
+            storage_dir=STORAGE_DIR / "files",
+        )
+
+    except UploadSessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Upload session not found",
+        ) from exc
+
+    except UploadSessionExpiredError as exc:
+        raise HTTPException(
+            status_code=410,
+            detail="Upload session has expired",
+        ) from exc
+
+    except InvalidChunkError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
         ) from exc
 
 @router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)
