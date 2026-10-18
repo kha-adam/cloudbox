@@ -26,7 +26,7 @@ class File(Base):
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
-    mime_type: Mapped[int] = mapped_column(String(100), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     storage_path: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
@@ -39,3 +39,18 @@ class File(Base):
         back_populates="files",
     )
 
+class UploadSession(Base):
+    __tablename__ = "upload_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    total_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    chunk_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_chunk: Mapped[int] = mapped_column(Integer, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False, default="application/octet-stream")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="in-progress")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default= lambda: datetime.now(UTC))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    
