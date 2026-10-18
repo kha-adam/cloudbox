@@ -15,6 +15,7 @@ from app.services.files import (
     UploadSessionExpiredError,
     ChunkConflictError,
     InvalidChunkError,
+    get_upload_status,
     save_upload_chunk,
     save_uploaded_file,
     create_file_record,
@@ -36,6 +37,7 @@ from app.schemas import (
     CurrentUserResponse,
     UploadSessionCreateRequest,
     UploadSessionResponse,
+    UploadStatusResponse,
 )
 router = APIRouter()
 
@@ -206,6 +208,23 @@ async def upload_chunk(
         raise HTTPException(
             status_code=422,
             detail=str(exc),
+        ) from exc
+
+@router.get("/uploads/{upload_id}", response_model=UploadStatusResponse,)
+def upload_status(
+    upload_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return get_upload_status(
+            owner_id=current_user.id,
+            upload_id=upload_id,
+            upload_dir=STORAGE_DIR / "uploads",
+        )
+    except UploadSessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Upload session not found",
         ) from exc
 
 @router.post("/auth/register", response_model=UserRegisterResponse, status_code=201)

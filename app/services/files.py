@@ -336,3 +336,67 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
         }
     finally:
         temporary.unlink(missing_ok=True)
+
+def get_upload_status(
+    owner_id: int,
+    upload_id: str,
+    upload_dir: Path,
+) -> dict:
+    db = SessionLocal()
+
+    try:
+        session = db.execute(
+            select(UploadSession).where(
+                UploadSession.id == upload_id,
+                UploadSession.owner_id == owner_id,
+            )
+        ).scalar_one_or_none()
+
+        if session is None:
+            raise UploadSessionNotFoundError()
+
+        upload_path = upload_dir / upload_id
+
+        received_chunks = sorted(
+            int(path.name.removesuffix(".chunk"))
+            for path in upload_path.glob("*.chunk")
+            if path.name.removesuffix(".chunk").isdigit()
+            and 0 <= int(path.name.removesuffix(".chunk")) < session.total_chunks
+            and path.stat().st_size == min(
+                session.chunk_size,
+                session.total_size
+                - int(path.name.removesuffix(".chunk")) * session.chunk_size,
+            )
+        ) if upload_path.exists() else []
+
+        received_set = set(received_chunks)
+        missing_chunks = [
+            index
+            for index in range(session.total_chunks)
+            if index not in received_set
+        ]
+
+        now = datetime.now(UTC)
+        expires_at = session.expires_at
+
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+
+        status = session.status
+        if expires_at <= now and status == "in_progress":
+            status = "expired"
+
+        return {
+            "upload_id": session.id,
+            "filename": session.filename,
+            "total_size": session.total_size,
+            "chunk_size": session.chunk_size,
+            "total_chunks": session.total_chunks,
+            "received_chunks": received_chunks,
+            "missing_chunks": missing_chunks,
+            "status": status,
+            "expires_at": expires_at,
+        }
+
+    finally:
+        db.close()

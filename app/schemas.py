@@ -61,3 +61,14 @@ class UploadSessionResponse(BaseModel):
     total_chunks: int
     status: str
     expires_at: datetime
+
+class UploadStatusResponse(BaseModel):
+    upload_id: str
+    filename: str
+    total_size: int
+    chunk_size: int
+    total_chunks: int
+    received_chunks: list[int]
+    missing_chunks: list[int]
+    status: str
+    expires_at: datetime

@@ -1,6 +1,7 @@
 import os
-from pathlib import Path
 import pytest
+import shutil
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(".env.test", override=True)
@@ -11,7 +12,7 @@ from alembic.config import Config
 from pathlib import Path
 
 from app.database import Base, SessionLocal, engine
-from app.models import File, User
+from app.models import File, User, UploadSession
 from app.config import settings
 
 def run_migrations():
@@ -25,6 +26,7 @@ def clean_test_data():
     db = SessionLocal()
 
     try:
+        db.query(UploadSession).delete()
         db.query(File).delete()
         db.query(User).delete()
         db.commit()
@@ -32,7 +34,12 @@ def clean_test_data():
         db.close()
 
     for path in TEST_STORAGE_DIR.iterdir():
-        if path.name != ".gitkeep" and path.is_file():
+        if path.name == ".gitkeep":
+            continue
+
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
             path.unlink()
 
 
