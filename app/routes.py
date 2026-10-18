@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 from fastapi import APIRouter, File as FastAPIFile, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -37,9 +38,11 @@ STORAGE_DIR.mkdir(exist_ok=True)
 @router.post("/files", response_model=FileUploadResponse)
 async def upload_file(file: UploadFile = FastAPIFile(...), 
                       current_user: User = Depends(get_current_user)):
+    upload_start = time.perf_counter()
     try:
+        storage_start = time.perf_counter()
         filename, storage_path, file_size, file_hash = await save_uploaded_file(file, STORAGE_DIR, max_upload_size=settings.max_upload_size,)
-
+        storage_ms = (time.perf_counter() - storage_start) * 1000
     except FileTooLargeError as exc:
         raise HTTPException(
             status_code=413,
@@ -47,6 +50,7 @@ async def upload_file(file: UploadFile = FastAPIFile(...),
         ) from exc
 
     try:
+        database_start = time.perf_counter()
         file_id = create_file_record(
             owner_id=current_user.id,
             filename=filename,
@@ -56,6 +60,7 @@ async def upload_file(file: UploadFile = FastAPIFile(...),
             storage_path=storage_path,
             max_storage_size=settings.max_storage_per_user
         )
+        database_ms = (time.perf_counter() - database_start)
     except StorageQuotaExceededError as exc:
         storage_path.unlink(missing_ok=True)
         raise HTTPException(
@@ -66,6 +71,15 @@ async def upload_file(file: UploadFile = FastAPIFile(...),
     except Exception:
         storage_path.unlink(missing_ok=True)
         raise
+
+    total_ms = (time.perf_counter() - upload_start) * 1000
+    print(
+        f"upload_timing file_size={file_size} "
+        f"storage_ms={storage_ms:.2f} "
+        f"database_ms={database_ms:.2f} "
+        f"total_ms={total_ms:.2f}",
+        flush=True,
+    )
     return {
         "id": file_id,
         "filename": filename,

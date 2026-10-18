@@ -93,7 +93,7 @@ for size_mb in FILE_SIZES_MIB:
         "max_ms": round(max(latencies_ms), 2),
     })
 
-output_path = Path("benchmarks/upload_size_results.csv")
+output_path = Path("benchmarks/upload_size_results_opti_try_1.csv")
 output_path.parent.mkdir(parents=True, exist_ok=True)
 
 with open(output_path, "a", newline="") as csvfile:
