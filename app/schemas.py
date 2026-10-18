@@ -49,3 +49,15 @@ class UserLoginResponse(BaseModel):
 class CurrentUserResponse(BaseModel):
     id: int
     email: str
+
+class UploadSessionCreateRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    total_size: int = Field(gt=0)
+    mime_type: str = Field(default="application/octet-stream", max_length=100)
+
+class UploadSessionResponse(BaseModel):
+    upload_id: str
+    chunk_size: int
+    total_chunks: int
+    status: str
+    expires_at: datetime

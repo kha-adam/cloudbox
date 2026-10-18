@@ -1,14 +1,17 @@
-import hashlib
+import math
 import uuid
+import hashlib
 from pathlib import Path
-
+from datetime import timedelta, datetime, UTC
 from fastapi import UploadFile
 
 from sqlalchemy import insert, select, delete, update
 from app.database import SessionLocal
-from app.models import File, User
+from app.models import File, User, UploadSession
 
 CHUNK_SIZE = 1024 * 1024
+RESUMABLE_CHUNK_SIZE = 5 * 1024 * 1024  # 5 MiB
+UPLOAD_SESSION_TTL = timedelta(hours=24)
 
 class FileTooLargeError(Exception):
     pass
@@ -146,5 +149,64 @@ def delete_file_record(file_id: int, owner_id: int) -> None:
     finally:
         db.close()
 
+def create_upload_session(owner_id: int, filename: str, total_size: int, mime_type:str, max_upload_size: int, max_storage_size: int) -> dict:
+    filename = Path(filename.replace("\\","/")).name
 
+    if not filename or filename in {".", ".."}:
+        raise ValueError("Invalid filename")
 
+    if total_size <= 0:
+        raise ValueError("Upload size must be positive")
+
+    if total_size > max_upload_size:
+        raise ValueError("File exceeds maximum allowed size")
+
+    chunk_size = RESUMABLE_CHUNK_SIZE
+    total_chunks = math.ceil(total_size / chunk_size)
+    upload_id = str(uuid.uuid4())
+    now = datetime.now(UTC)
+    expires_at = now + UPLOAD_SESSION_TTL
+
+    db = SessionLocal()
+
+    try:
+        reservation = db.execute(
+            update(User)
+            .where(User.id == owner_id,
+                   User.storage_used + User.reserved_storage + total_size <= max_storage_size,)
+            .values(reserved_storage=User.reserved_storage+total_size)
+            .returning(User.id)
+        )
+        if reservation.scalar_one_or_none() is None:
+            raise StorageQuotaExceededError(
+                "User storage quota exceeded"
+            )
+        session = UploadSession(
+            id=upload_id,
+            owner_id=owner_id,
+            filename=filename,
+            total_size=total_size,
+            chunk_size=chunk_size,
+            total_chunks=total_chunks,
+            mime_type=mime_type or "application/octet-stream",
+            status="in_progress",
+            created_at=now,
+            expires_at=expires_at,
+        )
+        db.add(session)
+        db.commit()
+
+        return {
+            "upload_id": upload_id,
+            "chunk_size": chunk_size,
+            "total_chunks": total_chunks,
+            "status": session.status,
+            "expires_at": expires_at,
+        }
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
