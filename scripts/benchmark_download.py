@@ -1,11 +1,12 @@
-import os
 import csv
-import time
 import math
-import httpx
+import os
 import statistics
-from pathlib import Path
+import time
 from datetime import datetime
+from pathlib import Path
+
+import httpx
 
 BASE_URL = "http://localhost:8000"
 UPLOAD_URL = f"{BASE_URL}/files"
@@ -75,9 +76,7 @@ def main():
         for size_mib in FILE_SIZES_MIB:
             print(f"\nPreparing {size_mib} MiB test file...")
 
-            file_id, expected_bytes = upload_test_file(
-                client, size_mib
-            )
+            file_id, expected_bytes = upload_test_file(client, size_mib)
 
             latencies_ms = []
 
@@ -96,9 +95,7 @@ def main():
                 print(f"Measuring {REQUESTS} downloads...")
 
                 for i in range(REQUESTS):
-                    elapsed_ms, received_bytes = download_once(
-                        client, file_id
-                    )
+                    elapsed_ms, received_bytes = download_once(client, file_id)
 
                     if received_bytes != expected_bytes:
                         raise ValueError(
@@ -109,9 +106,7 @@ def main():
                     latencies_ms.append(elapsed_ms)
 
                 ordered = sorted(latencies_ms)
-                p95_index = math.ceil(
-                    0.95 * len(ordered)
-                ) - 1
+                p95_index = math.ceil(0.95 * len(ordered)) - 1
 
                 median_ms = statistics.median(latencies_ms)
                 p95_ms = ordered[p95_index]
@@ -125,20 +120,18 @@ def main():
                 print(f"P95 latency: {p95_ms:.2f} ms")
                 print(f"Throughput: {throughput_mib_s:.2f} MiB/s")
 
-                summary_rows.append({
-                    "run_id": run_id,
-                    "timestamp": datetime.now().isoformat(
-                        timespec="seconds"
-                    ),
-                    "file_size_mib": size_mib,
-                    "requests": REQUESTS,
-                    "successes": len(latencies_ms),
-                    "median_ms": round(median_ms, 2),
-                    "p95_ms": round(p95_ms, 2),
-                    "throughput_mib_s": round(
-                        throughput_mib_s, 2
-                    ),
-                })
+                summary_rows.append(
+                    {
+                        "run_id": run_id,
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "file_size_mib": size_mib,
+                        "requests": REQUESTS,
+                        "successes": len(latencies_ms),
+                        "median_ms": round(median_ms, 2),
+                        "p95_ms": round(p95_ms, 2),
+                        "throughput_mib_s": round(throughput_mib_s, 2),
+                    }
+                )
 
             finally:
                 # Remove the test file even if a download fails.
@@ -147,9 +140,7 @@ def main():
     fieldnames = list(summary_rows[0].keys())
 
     with open(OUTPUT_PATH, "a", newline="") as csvfile:
-        writer = csv.DictWriter(
-            csvfile, fieldnames=fieldnames
-        )
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         if csvfile.tell() == 0:
             writer.writeheader()

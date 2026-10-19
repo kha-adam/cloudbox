@@ -1,4 +1,3 @@
-
 class RequestBodyTooLarge(Exception):
     pass
 
@@ -67,14 +66,18 @@ class RequestBodyLimitMiddleware:
                 raise
 
     async def _reject(self, send):
-        await send({
-            "type": "http.response.start",
-            "status": 413,
-            "headers": [
-                (b"content-type", b"application/json"),
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": b'{"detail":"Request body too large"}',
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 413,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b'{"detail":"Request body too large"}',
+            }
+        )

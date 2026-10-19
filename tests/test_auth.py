@@ -1,17 +1,17 @@
-from app.database import SessionLocal
-from app.config import settings
-from app.models import User
+import jwt
 
+from app.config import settings
+from app.database import SessionLocal
+from app.models import User
 from tests.conftest import client
 
-import jwt
 
 def test_register_user():
     response = client.post(
         "auth/register",
         json={
-            "email" : "user@example.com",
-            "password" : "supersecret123",
+            "email": "user@example.com",
+            "password": "supersecret123",
         },
     )
 
@@ -22,7 +22,8 @@ def test_register_user():
     assert data["email"] == "user@example.com"
     assert isinstance(data["id"], int)
     assert "password" not in data
-    assert 'password_hash' not in data
+    assert "password_hash" not in data
+
 
 def test_register_hashes_password():
     response = client.post(
@@ -38,14 +39,13 @@ def test_register_hashes_password():
     db = SessionLocal()
 
     try:
-        user = db.query(User).filter(
-            User.email == "adam@example.com"
-        ).one()
+        user = db.query(User).filter(User.email == "adam@example.com").one()
 
         assert user.password_hash != "supersecret123"
         assert user.password_hash.startswith("$argon2")
     finally:
         db.close()
+
 
 def test_register_duplicate_email():
     payload = {
@@ -67,6 +67,7 @@ def test_register_duplicate_email():
     assert second_response.status_code == 409
     assert second_response.json()["detail"] == "Email already registered"
 
+
 def test_register_normalizes_email():
     response = client.post(
         "/auth/register",
@@ -78,6 +79,7 @@ def test_register_normalizes_email():
 
     assert response.status_code == 201
     assert response.json()["email"] == "adam@example.com"
+
 
 def test_login():
     client.post(
@@ -103,25 +105,6 @@ def test_login():
     assert data["token_type"] == "bearer"
     assert data["access_token"]
 
-def test_login_wrong_password():
-    client.post(
-        "/auth/register",
-        json={
-            "email": "adam@example.com",
-            "password": "supersecret123",
-        },
-    )
-
-    response = client.post(
-        "/auth/login",
-        json={
-            "email": "adam@example.com",
-            "password": "wrong-password",
-        },
-    )
-
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid email or password"
 
 def test_login_wrong_password():
     client.post(
@@ -142,6 +125,7 @@ def test_login_wrong_password():
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid email or password"
+
 
 def test_login_token_contains_user_id():
     register_response = client.post(
@@ -173,6 +157,7 @@ def test_login_token_contains_user_id():
     assert payload["sub"] == str(user_id)
     assert "exp" in payload
 
+
 def test_register_rejects_invalid_email():
     response = client.post(
         "/auth/register",
@@ -183,6 +168,7 @@ def test_register_rejects_invalid_email():
     )
 
     assert response.status_code == 422
+
 
 def test_register_rejects_short_password():
     response = client.post(
@@ -195,6 +181,7 @@ def test_register_rejects_short_password():
 
     assert response.status_code == 422
 
+
 def test_register_accepts_eight_character_password():
     response = client.post(
         "/auth/register",
@@ -205,4 +192,3 @@ def test_register_accepts_eight_character_password():
     )
 
     assert response.status_code == 201
-

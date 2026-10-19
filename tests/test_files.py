@@ -1,45 +1,18 @@
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
-
-from app.database import SessionLocal
-from app.models import File, User
 from app.config import settings
+from app.database import SessionLocal
 from app.main import app
-
-from tests.helpers import get_auth_headers
+from app.models import File, User
 from tests.conftest import TEST_STORAGE_DIR
+from tests.helpers import get_auth_headers
 
 client = TestClient(app, raise_server_exceptions=False)
 
-def get_auth_headers(email = "test@example.com"):
-    response = client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "password123",
-        },
-    )
-
-    assert response.status_code == 201
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": email,
-            "password": "password123",
-        },
-    )
-
-    assert login_response.status_code == 200
-
-    token = login_response.json()["access_token"]
-
-    return {
-        "Authorization": f"Bearer {token}",
-    }
 
 def get_user_storage_used(email="test@example.com"):
     db = SessionLocal()
@@ -48,6 +21,7 @@ def get_user_storage_used(email="test@example.com"):
         return user.storage_used
     finally:
         db.close()
+
 
 def test_health_check():
     response = client.get("/health")
@@ -58,6 +32,7 @@ def test_health_check():
         "database": "ok",
     }
 
+
 def test_upload_file():
     headers = get_auth_headers()
     content = b"Hello CloudBox!"
@@ -65,7 +40,7 @@ def test_upload_file():
     response = client.post(
         "/files",
         files={
-            "file":(
+            "file": (
                 "hello.txt",
                 content,
                 "text/plain",
@@ -100,14 +75,15 @@ def test_upload_file():
     finally:
         db.close()
 
+
 def test_upload_and_download_file():
     headers = get_auth_headers()
     content = b"Hello CloudBox!"
-    
+
     upload_response = client.post(
         "/files",
         files={
-            "file":(
+            "file": (
                 "hello.txt",
                 content,
                 "text/plain",
@@ -121,12 +97,14 @@ def test_upload_and_download_file():
     file_id = upload_response.json()["id"]
 
     download_response = client.get(
-        f"files/{file_id}/download", headers=headers,
+        f"files/{file_id}/download",
+        headers=headers,
     )
 
     assert download_response.status_code == 200
     assert download_response.content == content
     assert "hello.txt" in download_response.headers["content-disposition"]
+
 
 def test_list_files():
     headers = get_auth_headers()
@@ -159,7 +137,10 @@ def test_list_files():
     assert first_response.status_code == 200
     assert second_response.status_code == 200
 
-    response = client.get("/files", headers=headers,)
+    response = client.get(
+        "/files",
+        headers=headers,
+    )
 
     assert response.status_code == 200
 
@@ -173,6 +154,7 @@ def test_list_files():
     filenames = {file["filename"] for file in files["items"]}
 
     assert filenames == {"first.txt", "second.txt"}
+
 
 def test_delete_file():
     headers = get_auth_headers()
@@ -209,7 +191,8 @@ def test_delete_file():
         db.close()
 
     delete_response = client.delete(
-        f"/files/{file_id}", headers=headers,
+        f"/files/{file_id}",
+        headers=headers,
     )
 
     assert delete_response.status_code == 200
@@ -228,15 +211,17 @@ def test_delete_file():
     assert not storage_path.exists()
 
     download_response = client.get(
-        f"/files/{file_id}/download", headers=headers,
+        f"/files/{file_id}/download",
+        headers=headers,
     )
 
     assert download_response.status_code == 404
 
+
 def test_download_nonexistant_file():
     headers = get_auth_headers()
     response = client.get(
-        f"/files/99999/download",
+        "/files/99999/download",
         headers=headers,
     )
 
@@ -245,17 +230,19 @@ def test_download_nonexistant_file():
         "detail": "File not found",
     }
 
+
 def test_delete_nonexistant_file():
     headers = get_auth_headers()
     response = client.delete(
-            f"/files/99999",
-            headers=headers,
-        )
-    
+        "/files/99999",
+        headers=headers,
+    )
+
     assert response.status_code == 404
     assert response.json() == {
         "detail": "File not found",
     }
+
 
 def test_download_when_storage_file_is_missing():
     headers = get_auth_headers()
@@ -290,14 +277,18 @@ def test_download_when_storage_file_is_missing():
         storage_path.unlink()
 
     finally:
-        db.close()   
+        db.close()
 
-    response = client.get(f"files/{file_id}/download",headers=headers,) 
+    response = client.get(
+        f"files/{file_id}/download",
+        headers=headers,
+    )
 
     assert response.status_code == 404
     assert response.json() == {
         "detail": "Stored file not found",
     }
+
 
 def test_upload_empty_file():
     headers = get_auth_headers()
@@ -322,6 +313,7 @@ def test_upload_empty_file():
     assert data["size"] == 0
     assert len(data["sha256"]) == 64
 
+
 def test_upload_exceeding_file_limit_rejection():
     headers = get_auth_headers()
     oversized_content = b"x" * (settings.max_upload_size + 1)
@@ -339,9 +331,7 @@ def test_upload_exceeding_file_limit_rejection():
     )
 
     assert response.status_code == 413
-    assert response.json() == {
-        "detail": "File exceeds maximum allowed size"
-    }
+    assert response.json() == {"detail": "File exceeds maximum allowed size"}
     db = SessionLocal()
 
     try:
@@ -352,10 +342,10 @@ def test_upload_exceeding_file_limit_rejection():
         db.close()
 
     stored_files = [
-        path for path in TEST_STORAGE_DIR.iterdir()
-        if path.name != ".gitkeep"
-    ]   
+        path for path in TEST_STORAGE_DIR.iterdir() if path.name != ".gitkeep"
+    ]
     assert stored_files == []
+
 
 def test_upload_doesnt_use_client_filename_as_storage_path():
     headers = get_auth_headers()
@@ -378,15 +368,14 @@ def test_upload_doesnt_use_client_filename_as_storage_path():
     assert data["filename"] == "outside.txt"
 
     stored_files = [
-        path
-        for path in TEST_STORAGE_DIR.iterdir()
-        if path.name != ".gitkeep"
+        path for path in TEST_STORAGE_DIR.iterdir() if path.name != ".gitkeep"
     ]
 
     assert len(stored_files) == 1
     assert stored_files[0].name != "../../outside.txt"
-    assert stored_files[0].parent == TEST_STORAGE_DIR 
-    assert stored_files[0].read_bytes() == b"secret data"   
+    assert stored_files[0].parent == TEST_STORAGE_DIR
+    assert stored_files[0].read_bytes() == b"secret data"
+
 
 def test_list_files_limit():
     headers = get_auth_headers()
@@ -401,7 +390,10 @@ def test_list_files_limit():
         headers=headers,
     )
 
-    response = client.get("/files?limit=1", headers=headers,)
+    response = client.get(
+        "/files?limit=1",
+        headers=headers,
+    )
 
     assert response.status_code == 200
 
@@ -411,6 +403,7 @@ def test_list_files_limit():
     assert data["limit"] == 1
     assert data["offset"] == 0
     assert data["total"] == 2
+
 
 def test_list_files_offset():
     headers = get_auth_headers()
@@ -425,7 +418,10 @@ def test_list_files_offset():
         headers=headers,
     )
 
-    response = client.get("/files?limit=1&offset=1", headers=headers,)
+    response = client.get(
+        "/files?limit=1&offset=1",
+        headers=headers,
+    )
 
     assert response.status_code == 200
 
@@ -435,8 +431,11 @@ def test_list_files_offset():
     assert data["offset"] == 1
     assert data["total"] == 2
 
+
 def test_users_only_see_their_own_files():
-    alice_headers = get_auth_headers(email="alice@example.com",)
+    alice_headers = get_auth_headers(
+        email="alice@example.com",
+    )
 
     bob_headers = get_auth_headers(email="bob@example.com")
 
@@ -480,18 +479,13 @@ def test_users_only_see_their_own_files():
     assert alice_files.status_code == 200
     assert bob_files.status_code == 200
 
-    alice_names = [
-        file["filename"]
-        for file in alice_files.json()["items"]
-    ]
+    alice_names = [file["filename"] for file in alice_files.json()["items"]]
 
-    bob_names = [
-        file["filename"]
-        for file in bob_files.json()["items"]
-    ]
+    bob_names = [file["filename"] for file in bob_files.json()["items"]]
 
     assert alice_names == ["alice.txt"]
     assert bob_names == ["bob.txt"]
+
 
 def test_user_cannot_download_another_users_file():
     alice_headers = get_auth_headers(email="alice@example.com")
@@ -521,10 +515,13 @@ def test_user_cannot_download_another_users_file():
 
     assert response.status_code == 404
 
+
 def test_user_cannot_delete_another_users_file():
     alice_headers = get_auth_headers(email="alice@example.com")
 
-    bob_headers = get_auth_headers(email="bob@example.com",)
+    bob_headers = get_auth_headers(
+        email="bob@example.com",
+    )
 
     upload_response = client.post(
         "/files",
@@ -558,6 +555,7 @@ def test_user_cannot_delete_another_users_file():
     assert download_response.status_code == 200
     assert download_response.content == b"do not delete"
 
+
 def test_upload_cleans_up_file_when_database_service_fails():
     headers = get_auth_headers()
 
@@ -588,12 +586,11 @@ def test_upload_cleans_up_file_when_database_service_fails():
     assert response.json()["total"] == 0
 
     stored_files = [
-        path
-        for path in TEST_STORAGE_DIR.iterdir()
-        if path.name != ".gitkeep"
+        path for path in TEST_STORAGE_DIR.iterdir() if path.name != ".gitkeep"
     ]
 
     assert stored_files == []
+
 
 def test_upload_increases_user_storage_usage():
     headers = get_auth_headers()
@@ -607,6 +604,7 @@ def test_upload_increases_user_storage_usage():
     assert response.status_code == 200
     assert response.json()["size"] == 5
     assert get_user_storage_used() == 5
+
 
 def test_upload_exceeding_user_quota_is_rejected(monkeypatch):
     monkeypatch.setattr(settings, "max_storage_per_user", 5)
@@ -629,6 +627,7 @@ def test_upload_exceeding_user_quota_is_rejected(monkeypatch):
     finally:
         db.close()
 
+
 def test_deleting_file_releases_user_storage():
     headers = get_auth_headers()
 
@@ -649,6 +648,7 @@ def test_deleting_file_releases_user_storage():
 
     assert delete_response.status_code == 200
     assert get_user_storage_used() == 0
+
 
 def test_concurrent_uploads_cannot_exceed_user_quota(monkeypatch):
     monkeypatch.setattr(settings, "max_storage_per_user", 5)
@@ -674,6 +674,7 @@ def test_concurrent_uploads_cannot_exceed_user_quota(monkeypatch):
         assert files[0].size == 4
     finally:
         db.close()
+
 
 def test_upload_rolls_back_quota_and_cleans_up_file_when_insert_fails():
     headers = get_auth_headers()
@@ -705,10 +706,7 @@ def test_upload_rolls_back_quota_and_cleans_up_file_when_insert_fails():
     assert get_user_storage_used() == 0
 
     stored_files = [
-        path
-        for path in TEST_STORAGE_DIR.iterdir()
-        if path.name != ".gitkeep"
+        path for path in TEST_STORAGE_DIR.iterdir() if path.name != ".gitkeep"
     ]
 
     assert stored_files == []
-

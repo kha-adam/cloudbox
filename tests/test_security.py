@@ -1,5 +1,4 @@
-
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -12,6 +11,7 @@ def test_decode_access_token_returns_user_id():
     token = create_access_token(123)
 
     assert decode_access_token(token) == 123
+
 
 def test_decode_access_token_rejects_expired_token():
     token = jwt.encode(
@@ -26,6 +26,7 @@ def test_decode_access_token_rejects_expired_token():
     with pytest.raises(jwt.ExpiredSignatureError):
         decode_access_token(token)
 
+
 def test_decode_access_token_rejects_missing_subject():
     token = jwt.encode(
         {
@@ -38,6 +39,7 @@ def test_decode_access_token_rejects_missing_subject():
     with pytest.raises(jwt.MissingRequiredClaimError):
         decode_access_token(token)
 
+
 def test_decode_access_token_rejects_missing_expiration():
     token = jwt.encode(
         {"sub": "123"},
@@ -47,6 +49,7 @@ def test_decode_access_token_rejects_missing_expiration():
 
     with pytest.raises(jwt.MissingRequiredClaimError):
         decode_access_token(token)
+
 
 def test_decode_access_token_rejects_non_numeric_subject():
     token = jwt.encode(
@@ -61,6 +64,7 @@ def test_decode_access_token_rejects_non_numeric_subject():
     with pytest.raises(ValueError, match="Invalid token subject"):
         decode_access_token(token)
 
+
 @pytest.mark.parametrize("subject", ["0", "-1", "1.5", ""])
 def test_decode_access_token_rejects_invalid_user_ids(subject):
     token = jwt.encode(
@@ -74,4 +78,3 @@ def test_decode_access_token_rejects_invalid_user_ids(subject):
 
     with pytest.raises(ValueError, match="Invalid token subject"):
         decode_access_token(token)
-

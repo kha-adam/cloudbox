@@ -1,4 +1,3 @@
-
 import csv
 import math
 import os
@@ -11,7 +10,6 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-
 
 BASE_URL = os.getenv("CLOUDBOX_BASE_URL", "http://localhost:8000")
 TOKEN = os.environ["CLOUDBOX_TOKEN"]
@@ -62,7 +60,7 @@ def upload(
 
         return latency_ms, file_id, None
 
-    except Exception as exc:
+    except httpx.HTTPError as exc:
         latency_ms = (time.perf_counter() - started) * 1000
         return latency_ms, None, f"{type(exc).__name__}: {exc}"
 
@@ -85,9 +83,7 @@ def worker(
         _, warmup_id, warmup_error = upload(client, payload)
 
         if warmup_error:
-            raise RuntimeError(
-                f"Worker {worker_id} warm-up failed: {warmup_error}"
-            )
+            raise RuntimeError(f"Worker {worker_id} warm-up failed: {warmup_error}")
 
         # Keep warm-up data out of the measured benchmark.
         if warmup_id is not None:
@@ -114,7 +110,7 @@ def cleanup_files(file_ids: list[int]) -> None:
             try:
                 response = client.delete(f"{BASE_URL}/files/{file_id}")
                 response.raise_for_status()
-            except Exception as exc:
+            except httpx.HTTPError as exc:
                 print(f"WARNING: could not delete file {file_id}: {exc}")
 
 
@@ -143,8 +139,7 @@ def main() -> None:
 
     for concurrency in CONCURRENCY_LEVELS:
         print(
-            f"\nTesting {FILE_SIZE_MIB} MiB uploads "
-            f"with concurrency={concurrency}..."
+            f"\nTesting {FILE_SIZE_MIB} MiB uploads with concurrency={concurrency}..."
         )
 
         barrier = threading.Barrier(concurrency + 1)
@@ -173,9 +168,7 @@ def main() -> None:
         elapsed_seconds = time.perf_counter() - started
 
         latencies = [result[0] for result in all_results]
-        file_ids = [
-            result[1] for result in all_results if result[1] is not None
-        ]
+        file_ids = [result[1] for result in all_results if result[1] is not None]
         errors = [result[2] for result in all_results if result[2] is not None]
         successes = len(all_results) - len(errors)
 

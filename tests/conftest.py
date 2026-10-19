@@ -1,29 +1,32 @@
-import os
-import pytest
 import shutil
 from pathlib import Path
-from alembic import command
-from dotenv import load_dotenv
+
+import pytest
 from alembic.config import Config
-from sqlalchemy.engine import make_url
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
+from sqlalchemy.engine import make_url
+
+from alembic import command
 
 load_dotenv(".env.test", override=False)
 
-from app.database import Base, SessionLocal, engine
-from app.models import File, User, UploadSession
 from app.config import settings
+from app.database import SessionLocal
 from app.main import app
-
+from app.models import File, UploadSession, User
 
 client = TestClient(app, raise_server_exceptions=False)
+
 
 def run_migrations():
     alembic_cfg = Config("alembic.ini")
     command.upgrade(alembic_cfg, "head")
 
+
 TEST_STORAGE_DIR = Path(settings.storage_dir)
 TEST_STORAGE_DIR.mkdir(exist_ok=True)
+
 
 def assert_test_database():
     database_name = make_url(settings.database_url).database
@@ -33,6 +36,7 @@ def assert_test_database():
             "Refusing to clean database: the configured database "
             "name must contain 'test'."
         )
+
 
 def clean_test_data():
     db = SessionLocal()
@@ -57,7 +61,7 @@ def clean_test_data():
 
 @pytest.fixture(autouse=True)
 def clean_test_data_fixture():
-    
+
     clean_test_data()
 
     yield

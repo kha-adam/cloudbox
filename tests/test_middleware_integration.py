@@ -1,4 +1,3 @@
-
 import asyncio
 import json
 
@@ -20,6 +19,7 @@ def create_test_app(max_body_size: int) -> FastAPI:
 
     return test_app
 
+
 def test_real_upload_request_exceeding_limit_returns_413():
     # A tiny limit makes the test fast and avoids a huge payload.
     app = create_test_app(max_body_size=100)
@@ -39,10 +39,11 @@ def test_real_upload_request_exceeding_limit_returns_413():
     assert response.status_code == 413
     assert response.json()["detail"] == "Request body too large"
 
+
 def test_streaming_request_without_content_length_returns_413():
     max_body_size = 100
 
-    test_app = create_test_app(max_body_size = max_body_size)
+    test_app = create_test_app(max_body_size=max_body_size)
 
     @test_app.post("/echo")
     async def echo(request: Request):
@@ -101,17 +102,11 @@ def test_streaming_request_without_content_length_returns_413():
     messages = asyncio.run(run_request())
 
     response_start = next(
-        message
-        for message in messages
-        if message["type"] == "http.response.start"
+        message for message in messages if message["type"] == "http.response.start"
     )
     response_body = next(
-        message
-        for message in messages
-        if message["type"] == "http.response.body"
+        message for message in messages if message["type"] == "http.response.body"
     )
 
     assert response_start["status"] == 413
-    assert json.loads(response_body["body"]) == {
-        "detail": "Request body too large"
-    }
+    assert json.loads(response_body["body"]) == {"detail": "Request body too large"}

@@ -1,8 +1,8 @@
 import os
-import time
-import httpx
 import statistics
-from concurrent.futures import ThreadPoolExecutor
+import time
+
+import httpx
 
 URL = "http://localhost:8000/files"
 
@@ -19,7 +19,7 @@ with httpx.Client(headers={"Authorization": f"Bearer {TOKEN}"}) as client:
             response = client.get(URL)
             elapsed = time.perf_counter() - start
 
-            if response.status_code == 200: 
+            if response.status_code == 200:
                 latencies.append(elapsed * 1000)
             else:
                 errors += 1

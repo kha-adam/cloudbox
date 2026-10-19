@@ -1,12 +1,13 @@
-import os
 import csv
+import math
+import os
+import statistics
 import time
 import uuid
-import math
-import httpx
-import statistics
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+import httpx
 
 BASE_URL = "http://localhost:8000"
 UPLOAD_URL = f"{BASE_URL}/files"
@@ -52,7 +53,7 @@ def upload_and_delete(client, payload, headers):
 
 
 for size_mb in FILE_SIZES_MIB:
-    FILE_SIZES_BYTES = size_mb * 1024 * 1024 
+    FILE_SIZES_BYTES = size_mb * 1024 * 1024
     payload = os.urandom(FILE_SIZES_BYTES)
     latencies_ms = []
 
@@ -65,7 +66,9 @@ for size_mb in FILE_SIZES_MIB:
         for i in range(REQUESTS):
             start = time.perf_counter()
 
-            elapsed_ms, result = upload_and_delete(client, payload=payload, headers= headers)
+            elapsed_ms, result = upload_and_delete(
+                client, payload=payload, headers=headers
+            )
 
             latencies_ms.append(elapsed_ms)
 
@@ -80,27 +83,29 @@ for size_mb in FILE_SIZES_MIB:
     print(f"P95 latency: {ordered[p95_index]:.2f} ms")
     print(f"Min latency: {min(latencies_ms):.2f} ms")
     print(f"Max latency: {max(latencies_ms):.2f} ms")
-    summary_rows.append({
-        "run_id": run_id,
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "file_size_mib": size_mb,
-        "requests": REQUESTS,
-        "successes": len(latencies_ms),
-        "mean_ms": round(statistics.mean(latencies_ms), 2),
-        "median_ms": round(statistics.median(latencies_ms), 2),
-        "p95_ms": round(ordered[p95_index], 2),
-        "min_ms": round(min(latencies_ms), 2),
-        "max_ms": round(max(latencies_ms), 2),
-    })
+    summary_rows.append(
+        {
+            "run_id": run_id,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "file_size_mib": size_mb,
+            "requests": REQUESTS,
+            "successes": len(latencies_ms),
+            "mean_ms": round(statistics.mean(latencies_ms), 2),
+            "median_ms": round(statistics.median(latencies_ms), 2),
+            "p95_ms": round(ordered[p95_index], 2),
+            "min_ms": round(min(latencies_ms), 2),
+            "max_ms": round(max(latencies_ms), 2),
+        }
+    )
 
 output_path = Path("benchmarks/upload_size_results_opti_try_1.csv")
 output_path.parent.mkdir(parents=True, exist_ok=True)
 
 with open(output_path, "a", newline="") as csvfile:
-    fieldnames=summary_rows[0].keys()
+    fieldnames = summary_rows[0].keys()
 
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    
+
     if csvfile.tell() == 0:
         writer.writeheader()
     writer.writerows(summary_rows)

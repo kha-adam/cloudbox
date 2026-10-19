@@ -14,11 +14,13 @@ with CSV_PATH.open(newline="") as csvfile:
     reader = csv.DictReader(csvfile)
 
     for row in reader:
-        results.append({
-            "concurrency": int(row["concurrency"]),
-            "throughput": float(row["throughput_rps"]),
-            "p95": float(row["p95_ms"]),
-        })
+        results.append(
+            {
+                "concurrency": int(row["concurrency"]),
+                "throughput": float(row["throughput_rps"]),
+                "p95": float(row["p95_ms"]),
+            }
+        )
 
 if not results:
     raise ValueError("The CSV contains no benchmark results.")
@@ -33,12 +35,10 @@ levels = sorted(groups)
 
 # Calculate the mean across repeated runs at each concurrency level.
 mean_throughput = [
-    sum(r["throughput"] for r in groups[level]) / len(groups[level])
-    for level in levels
+    sum(r["throughput"] for r in groups[level]) / len(groups[level]) for level in levels
 ]
 mean_p95 = [
-    sum(r["p95"] for r in groups[level]) / len(groups[level])
-    for level in levels
+    sum(r["p95"] for r in groups[level]) / len(groups[level]) for level in levels
 ]
 
 # Graph 1: throughput

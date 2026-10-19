@@ -4,6 +4,7 @@ from app.middleware import RequestBodyLimitMiddleware
 
 MAX_BODY_SIZE = 5
 
+
 def make_scope(headers=None):
     return {
         "type": "http",
@@ -19,6 +20,7 @@ def make_scope(headers=None):
         "client": ("testclient", 1234),
     }
 
+
 async def fake_app(scope, receive, send):
     # Consume the request body, as a real application might.
     while True:
@@ -30,15 +32,20 @@ async def fake_app(scope, receive, send):
         if not message.get("more_body", False):
             break
 
-    await send({
-        "type": "http.response.start",
-        "status": 200,
-        "headers": [],
-    })
-    await send({
-        "type": "http.response.body",
-        "body": b"OK",
-    })
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+        }
+    )
+    await send(
+        {
+            "type": "http.response.body",
+            "body": b"OK",
+        }
+    )
+
 
 def run_middleware(headers, body_messages):
     async def run():
@@ -64,12 +71,14 @@ def run_middleware(headers, body_messages):
 
     return asyncio.run(run())
 
+
 def response_status(messages):
     return next(
         message["status"]
         for message in messages
         if message["type"] == "http.response.start"
     )
+
 
 def test_rejects_declared_oversized_body():
     messages = run_middleware(
@@ -78,6 +87,7 @@ def test_rejects_declared_oversized_body():
     )
 
     assert response_status(messages) == 413
+
 
 def test_rejects_oversized_body_without_content_length():
     messages = run_middleware(
@@ -97,6 +107,7 @@ def test_rejects_oversized_body_without_content_length():
     )
 
     assert response_status(messages) == 413
+
 
 def test_allows_body_within_limit():
     messages = run_middleware(

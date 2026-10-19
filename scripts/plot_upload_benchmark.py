@@ -1,7 +1,7 @@
-
-import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
 
 # Paths
 INPUT_PATH = Path("benchmarks/upload_size_results.csv")
