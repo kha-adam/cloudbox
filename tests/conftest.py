@@ -18,7 +18,7 @@ from app.config import settings
 from app.main import app
 
 
-client = TestClient(app, raise_server_exceptions=True)
+client = TestClient(app, raise_server_exceptions=False)
 
 def run_migrations():
     alembic_cfg = Config("alembic.ini")

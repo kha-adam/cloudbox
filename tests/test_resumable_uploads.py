@@ -529,3 +529,79 @@ def test_complete_upload_rejects_missing_chunks():
     assert response.status_code == 400
     assert "Missing chunk 1" in response.json()["detail"]
 
+
+def test_complete_upload_is_idempotent():
+    headers = get_auth_headers()
+    content = b"CloudBox idempotency test"
+
+    # Create an upload session.
+    session_response = client.post(
+        "/uploads",
+        json={
+            "filename": "idempotent.txt",
+            "total_size": len(content),
+            "mime_type": "text/plain",
+        },
+        headers=headers,
+    )
+    assert session_response.status_code == 201, session_response.json()
+    upload_id = session_response.json()["upload_id"]
+
+    # Upload the only chunk.
+    chunk_response = client.put(
+        f"/uploads/{upload_id}/chunks/0",
+        content=content,
+        headers=headers,
+    )
+    assert chunk_response.status_code == 200, chunk_response.json()
+
+    # Complete the upload for the first time.
+    first_response = client.post(
+        f"/uploads/{upload_id}/complete",
+        headers=headers,
+    )
+    assert first_response.status_code == 200, first_response.json()
+    first_data = first_response.json()
+    print(first_data)
+
+    # Retry completion.
+    second_response = client.post(
+        f"/uploads/{upload_id}/complete",
+        headers=headers,
+    )
+    assert second_response.status_code == 200, second_response.json()
+    second_data = second_response.json()
+
+    # Both requests must identify the same file.
+    assert second_data["id"] == first_data["id"]
+    assert second_data["sha256"] == first_data["sha256"]
+    assert second_data["size"] == len(content)
+
+    db = SessionLocal()
+    try:
+        file_record = db.get(File, first_data["id"])
+        assert file_record is not None
+        assert file_record.filename == "idempotent.txt"
+        assert file_record.size == len(content)
+        assert file_record.sha256 == hashlib.sha256(content).hexdigest()
+        assert Path(file_record.storage_path).read_bytes() == content
+
+        # Only one record should exist for this file and owner.
+        file_records = (
+            db.query(File)
+            .filter(
+                File.owner_id == file_record.owner_id,
+                File.filename == "idempotent.txt",
+            )
+            .all()
+        )
+        assert len(file_records) == 1
+
+        user = db.get(User, file_record.owner_id)
+        assert user is not None
+        assert user.storage_used == len(content)
+        assert user.reserved_storage == 0
+
+    finally:
+        db.close()
+

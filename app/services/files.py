@@ -11,7 +11,7 @@ from app.database import SessionLocal
 from app.models import File, User, UploadSession
 
 CHUNK_SIZE = 1024 * 1024
-RESUMABLE_CHUNK_SIZE = 5 * 1024 * 1024  # 5 MiB
+RESUMABLE_CHUNK_SIZE = 5 * 1024 * 1024
 UPLOAD_SESSION_TTL = timedelta(hours=24)
 
 class FileTooLargeError(Exception):
@@ -434,7 +434,7 @@ def complete_upload(owner_id: int, upload_id: str, upload_dir: Path, storage_dir
         if session.status == "completed":
             file_record = db.execute(
                 select(File)
-                .where(File.owner_id == owner_id, File.storage_path == str(storage_dir / upload_id / session.filename),)
+                .where(File.owner_id == owner_id, File.storage_path == str(storage_dir / upload_id),)
             ).scalar_one_or_none()
 
             if file_record is None:
@@ -461,11 +461,10 @@ def complete_upload(owner_id: int, upload_id: str, upload_dir: Path, storage_dir
         chunk_paths = validate_upload_chunks(session, upload_dir)
 
         storage_dir.mkdir(parents=True, exist_ok=True)
+        
+        final_path = storage_dir / upload_id
 
-        final_path = storage_dir / f"{upload_id}"
-        # final_path = storage_dir / f"{upload_id}-{session.filename}"
-
-        temporary = storage_dir / f".{upload_id}.{uuid.uuid4()}.tmp"
+        temporary = storage_dir / f".{upload_id}-temporary.tmp"
 
         digest = hashlib.sha256()
 
@@ -489,7 +488,7 @@ def complete_upload(owner_id: int, upload_id: str, upload_dir: Path, storage_dir
             .with_for_update()
         ).scalar_one()
 
-        final_path.parent.mkdir(parents=True, exist_ok = True)
+        # final_path.parent.mkdir(parents=True, exist_ok = True)
         temporary.replace(final_path)
 
         moved_final_file = True
@@ -528,4 +527,4 @@ def complete_upload(owner_id: int, upload_id: str, upload_dir: Path, storage_dir
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-        db.close
+        db.close()

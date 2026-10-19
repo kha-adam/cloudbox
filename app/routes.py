@@ -238,7 +238,7 @@ def finish_upload(
             owner_id=current_user.id,
             upload_id=upload_id,
             upload_dir=STORAGE_DIR / "uploads",
-            storage_dir=STORAGE_DIR / "files",
+            storage_dir=STORAGE_DIR,
         )
 
     except UploadSessionNotFoundError as exc:
