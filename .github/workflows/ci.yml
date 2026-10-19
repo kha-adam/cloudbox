@@ -1,0 +1,48 @@
+
+name: CloudBox CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cloudbox
+          POSTGRES_PASSWORD: cloudbox_test_password
+          POSTGRES_DB: cloudbox_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cloudbox -d cloudbox_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://cloudbox:cloudbox_test_password@localhost:5432/cloudbox_test
+      JWT_SECRET_KEY: ci-only-test-secret-not-for-production
+      STORAGE_DIR: storage_test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply database migrations
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest -v

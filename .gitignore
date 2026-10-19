@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .env
 .env.test
+.env.docker
 *.pyc
 storage/*
 !storage/.gitkeep
@@ -10,4 +11,3 @@ test_storage/*
 !test_storage/.gitkeep
 .DS_Store
 large-test.bi
-.env.docker

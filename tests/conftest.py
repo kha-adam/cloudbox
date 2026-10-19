@@ -2,15 +2,13 @@ import os
 import pytest
 import shutil
 from pathlib import Path
+from alembic import command
 from dotenv import load_dotenv
+from alembic.config import Config
+from sqlalchemy.engine import make_url
 from fastapi.testclient import TestClient
 
-load_dotenv(".env.test", override=True)
-
-from alembic import command
-from alembic.config import Config
-
-from pathlib import Path
+load_dotenv(".env.test", override=False)
 
 from app.database import Base, SessionLocal, engine
 from app.models import File, User, UploadSession
@@ -27,9 +25,18 @@ def run_migrations():
 TEST_STORAGE_DIR = Path(settings.storage_dir)
 TEST_STORAGE_DIR.mkdir(exist_ok=True)
 
+def assert_test_database():
+    database_name = make_url(settings.database_url).database
+
+    if not database_name or "test" not in database_name.lower():
+        raise RuntimeError(
+            "Refusing to clean database: the configured database "
+            "name must contain 'test'."
+        )
+
 def clean_test_data():
     db = SessionLocal()
-
+    assert_test_database()
     try:
         db.query(UploadSession).delete()
         db.query(File).delete()
