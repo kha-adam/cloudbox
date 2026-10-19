@@ -29,7 +29,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
+  cleanup-worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      PYTHONUNBUFFERED: "1"
+      CLEANUP_INTERVAL_SECONDS: "300"
+    command: ["python", "-u", "-m", "app.workers.cleanup"]
+    volumes:
+      - cloudbox_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
