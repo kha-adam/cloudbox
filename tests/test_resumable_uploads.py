@@ -1,11 +1,13 @@
-from pathlib import Path
 import hashlib
+from pathlib import Path
+from datetime import datetime, timedelta, UTC
 
 from app.database import SessionLocal
 from app.models import File, User, UploadSession
 from app.config import settings
 from app.database import SessionLocal
 from app.models import UploadSession
+from app.services.files import cleanup_expired_uploads
 
 from tests.conftest import TEST_STORAGE_DIR
 from tests.helpers import get_auth_headers, client
@@ -529,7 +531,6 @@ def test_complete_upload_rejects_missing_chunks():
     assert response.status_code == 400
     assert "Missing chunk 1" in response.json()["detail"]
 
-
 def test_complete_upload_is_idempotent():
     headers = get_auth_headers()
     content = b"CloudBox idempotency test"
@@ -605,3 +606,50 @@ def test_complete_upload_is_idempotent():
     finally:
         db.close()
 
+def test_cleanup_expired_upload_releases_reserved_storage():
+    headers = get_auth_headers()
+    total_size = 1024
+
+    response = client.post(
+        "/uploads",
+        json={
+            "filename": "expired.bin",
+            "total_size": total_size,
+            "mime_type": "application/octet-stream",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201, response.json()
+    upload_id = response.json()["upload_id"]
+
+    db = SessionLocal()
+    try:
+        session = db.get(UploadSession, upload_id)
+        assert session is not None
+
+        owner_id = session.owner_id
+        user = db.get(User, owner_id)
+        assert user is not None
+        assert user.reserved_storage == total_size
+
+        session.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
+
+    removed_count = cleanup_expired_uploads(
+        upload_dir= TEST_STORAGE_DIR / "uploads",
+        now=datetime.now(UTC),
+    )
+
+    assert removed_count == 1
+
+    db = SessionLocal()
+    try:
+        assert db.get(UploadSession, upload_id) is None
+
+        user = db.get(User, owner_id)
+        assert user is not None
+        assert user.reserved_storage == 0
+    finally:
+        db.close()

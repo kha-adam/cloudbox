@@ -1,5 +1,6 @@
 import math
 import uuid
+import shutil
 import hashlib
 from pathlib import Path
 from fastapi import UploadFile
@@ -332,11 +333,7 @@ async def save_upload_chunk(owner_id: int, upload_id: str, chunk_index: int, bod
     finally:
         temporary.unlink(missing_ok=True)
 
-def get_upload_status(
-    owner_id: int,
-    upload_id: str,
-    upload_dir: Path,
-) -> dict:
+def get_upload_status(owner_id: int, upload_id: str, upload_dir: Path,) -> dict:
     db = SessionLocal()
 
     try:
@@ -527,4 +524,47 @@ def complete_upload(owner_id: int, upload_id: str, upload_dir: Path, storage_dir
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+        db.close()
+
+def cleanup_expired_uploads(upload_dir: Path, now: datetime | None = None) -> int:
+    now = now or datetime.now(UTC)
+    removed_count = 0
+    db = SessionLocal()
+    try:
+        expired_sessions = db.execute(
+            select(UploadSession)
+            .where(
+                UploadSession.status == "in_progress",
+                UploadSession.expires_at <= now,
+            )
+            .with_for_update(skip_locked=True)
+        ).scalars().all()
+
+        for session in expired_sessions:
+            session_dir = upload_dir / session.id
+            if session_dir.exists():
+                shutil.rmtree(session_dir)
+
+            user = db.execute(
+                select(User)
+                .where(User.id == session.owner_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+
+            if user is None:
+                continue
+
+            user.reserved_storage = max(0, user.reserved_storage-session.total_size)
+
+            db.delete(session)
+            removed_count += 1
+
+        db.commit()
+        return removed_count
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
         db.close()
